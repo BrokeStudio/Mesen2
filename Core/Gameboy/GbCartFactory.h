@@ -12,6 +12,7 @@
 #include "Gameboy/Carts/GbHuc1.h"
 #include "Gameboy/Carts/GbWisdomTree.h"
 #include "Gameboy/GbxFooter.h"
+#include "Gameboy/Carts/GbRainbow.h"
 
 class GbCartFactory
 {
@@ -99,6 +100,9 @@ private:
 
 			case 0x22:
 				return new GbMbc7();
+
+			case 0xFA:
+				return new GbRainbow();
 
 			case 0xFE:
 				//HuC3
