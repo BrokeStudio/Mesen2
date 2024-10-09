@@ -21,6 +21,7 @@ private:
 
 	struct Mmc3State
 	{
+		uint8_t Reg5000;
 		uint8_t Reg8000;
 		uint8_t RegA000;
 		uint8_t RegA001;
@@ -34,6 +35,8 @@ protected:
 	uint8_t _prgMode = 0;
 	uint8_t _chrMode = 0;
 	uint8_t _registers[8] = {};
+
+	uint16_t RegisterStartAddress() override { return 0x5000; }
 
 	uint8_t GetCurrentRegister()
 	{
@@ -52,6 +55,7 @@ protected:
 
 	void ResetMmc3()
 	{
+		_state.Reg5000 = 0;
 		_state.Reg8000 = GetPowerOnByte();
 		_state.RegA000 = GetPowerOnByte();
 		_state.RegA001 = GetPowerOnByte();
@@ -115,16 +119,30 @@ protected:
 
 	virtual void UpdatePrgMapping()
 	{
+
+		uint8_t M2 = -2;
+		uint8_t M1 = -1;
+		uint8_t R6 = _registers[6];
+		uint8_t R7 = _registers[7];
+
+		if(_state.Reg5000 & 0x80) {
+			uint8_t B5 = (_state.Reg5000 & 0x01) ? 0x20 : 0x00;
+			M2 = 0x1E | B5;
+			M1 = 0x1F | B5;
+			R6 = (R6 & 0x1F) | B5;
+			R7 = (R7 & 0x1F) | B5;
+		}
+
 		if(_prgMode == 0) {
-			SelectPrgPage(0, _registers[6]);
-			SelectPrgPage(1, _registers[7]);
-			SelectPrgPage(2, -2);
-			SelectPrgPage(3, -1);
+			SelectPrgPage(0, R6);
+			SelectPrgPage(1, R7);
+			SelectPrgPage(2, M2);
+			SelectPrgPage(3, M1);
 		} else if(_prgMode == 1) {
-			SelectPrgPage(0, -2);
-			SelectPrgPage(1, _registers[7]);
-			SelectPrgPage(2, _registers[6]);
-			SelectPrgPage(3, -1);
+			SelectPrgPage(0, M2);
+			SelectPrgPage(1, R7);
+			SelectPrgPage(2, R6);
+			SelectPrgPage(3, M1);
 		}
 	}
 
@@ -206,6 +224,13 @@ protected:
 
 	void WriteRegister(uint16_t addr, uint8_t value) override
 	{
+
+		if(addr == 0x5000) {
+			_state.Reg5000 = value & 0x81;
+			UpdateState();
+			return;
+		}
+
 		switch(addr & 0xE001) {
 			case 0x8000:
 				_state.Reg8000 = value;
@@ -249,6 +274,12 @@ protected:
 				_irqEnabled = true;
 				break;
 		}
+
+		if(addr >= 0x6000) {
+			AddressInfo absAddr = GetAbsoluteAddress(addr);
+			WritePrgRam(addr, value);
+		}
+
 	}
 
 	virtual void TriggerIrq()
