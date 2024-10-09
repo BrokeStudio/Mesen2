@@ -19,6 +19,8 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="NES\Mappers\Homebrew\RainbowESP.h" />
+    <ClCompile Include="NES\Mappers\Homebrew\RainbowESP.cpp" />
     <ClInclude Include="NES\Epsm.h" />
     <ClInclude Include="NES\Mappers\Homebrew\Rainbow.h" />
     <ClInclude Include="NES\Mappers\Homebrew\RainbowAudio.h" />
@@ -136,12 +138,7 @@
     <ClInclude Include="NES\Mappers\Homebrew\FaridSlrom.h" />
     <ClInclude Include="NES\Mappers\Homebrew\FaridUnrom.h" />
     <ClInclude Include="NES\Mappers\Homebrew\FlashSST39SF040.h" />
-    <ClInclude Include="NES\Mappers\Homebrew\Flash3_3V.h" />
     <ClInclude Include="NES\Mappers\Homebrew\MagicFloor218.h" />
-    <ClInclude Include="NES\Mappers\Homebrew\RainbowESP.h" />
-    <ClCompile Include="NES\Mappers\Homebrew\RainbowESP.cpp" />
-    <ClInclude Include="NES\Mappers\Homebrew\RainbowMemoryHandler.h" />
-    <ClInclude Include="NES\Mappers\Homebrew\Rainbow.h" />
     <ClInclude Include="NES\Mappers\Homebrew\SealieComputing.h" />
     <ClInclude Include="NES\Mappers\Homebrew\UnRom512.h" />
     <ClInclude Include="NES\Mappers\Irem\BnRom.h" />
@@ -497,9 +494,6 @@
     <ClInclude Include="NES\Mappers\A12Watcher.h" />
     <ClInclude Include="NES\Mappers\Audio\Mmc5Audio.h" />
     <ClInclude Include="NES\Mappers\Audio\Namco163Audio.h" />
-    <ClInclude Include="NES\Mappers\Audio\RainbowAudio.h" />
-    <ClInclude Include="NES\Mappers\Audio\RainbowPulse.h" />
-    <ClInclude Include="NES\Mappers\Audio\RainbowSaw.h" />
     <ClInclude Include="NES\Mappers\Audio\Sunsoft5bAudio.h" />
     <ClInclude Include="NES\Mappers\Audio\Vrc6Audio.h" />
     <ClInclude Include="NES\Mappers\Audio\Vrc6Pulse.h" />
@@ -611,7 +605,7 @@
     <ClInclude Include="Gameboy\Carts\GbMbc2.h" />
     <ClInclude Include="Gameboy\Carts\GbMbc3.h" />
     <ClInclude Include="Gameboy\Carts\GbMbc5.h" />
-	 <ClInclude Include="Gameboy\Carts\GbRainbow.h" />
+    <ClInclude Include="Gameboy\Carts\GbRainbow.h" />
     <ClInclude Include="Gameboy\GbMemoryManager.h" />
     <ClInclude Include="Gameboy\APU\GbNoiseChannel.h" />
     <ClInclude Include="Gameboy\GbPpu.h" />
@@ -1200,7 +1194,7 @@
       </AdditionalIncludeDirectories>
       <StructMemberAlignment>Default</StructMemberAlignment>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <DisableLanguageExtensions>true</DisableLanguageExtensions>
+      <DisableLanguageExtensions>false</DisableLanguageExtensions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <MinimalRebuild>false</MinimalRebuild>
       <ShowIncludes>
@@ -1233,7 +1227,7 @@
       </AdditionalIncludeDirectories>
       <StructMemberAlignment>Default</StructMemberAlignment>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <DisableLanguageExtensions>true</DisableLanguageExtensions>
+      <DisableLanguageExtensions>false</DisableLanguageExtensions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <ShowIncludes>
       </ShowIncludes>

@@ -2,6 +2,7 @@
 #include "pch.h"
 #include "NES/BaseMapper.h"
 #include "NES/Debugger/IExtModeMapperDebug.h"
+#include "NES/Mappers/Homebrew/RainbowESP.h"
 
 class RainbowAudio;
 class FlashS29;
@@ -55,7 +56,7 @@ private:
 
 	uint8_t _fillModeTileIndex = 0;
 	uint8_t _fillModeAttrIndex = 0;
-	
+
 	NtControl _windowControl = {};
 	uint8_t _windowBank = 0;
 	uint8_t _windowX1 = 0;
@@ -65,7 +66,7 @@ private:
 	uint8_t _windowScrollX = 0;
 	uint8_t _windowScrollY = 0;
 	bool _inWindow = false;
-	
+
 	bool _slIrqEnabled = false;
 	bool _slIrqPending = false;
 	uint8_t _slIrqScanline = 0;
@@ -112,10 +113,11 @@ private:
 	uint8_t _oamCode[0x506] = {};
 	bool _oamCodeLocked = false;
 
+	BrokeStudioFirmware* _esp = NULL;
 	bool _espEnabled = false;
 	bool _wifiIrqEnabled = false;
 	bool _wifiIrqPending = false;
-	bool _dataSent = false;
+	bool _dataSent = true;
 	bool _dataReceived = false;
 	bool _dataReady = false;
 	uint8_t _sendSrcAddr = 0;
@@ -163,7 +165,7 @@ public:
 
 	void WriteRam(uint16_t addr, uint8_t value) override;
 	uint8_t ReadRam(uint16_t addr) override;
-	
+
 	void ProcessCpuClock() override;
 
 	uint8_t ReadRegister(uint16_t addr) override;
@@ -181,4 +183,8 @@ public:
 	ExtModeConfig GetExModeConfig() override;
 
 	void Serialize(Serializer& s) override;
+
+	void EspCheckNewMessage();
+	bool EspMessageReceived();
+	void EspClearMessageReceived();
 };

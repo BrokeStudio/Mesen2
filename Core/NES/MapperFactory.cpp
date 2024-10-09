@@ -620,8 +620,6 @@ BaseMapper* MapperFactory::GetMapperFromID(RomData &romData)
 		
 		case 682: return new Rainbow();
 
-		case 682: return new RNBW();
-
 		case UnifBoards::Ac08: return new Ac08(); //mapper 42?
 		case UnifBoards::Cc21: return new Cc21();
 		case UnifBoards::Ghostbusters63in1: return new Ghostbusters63in1(); //mapper 226?
