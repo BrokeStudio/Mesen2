@@ -767,6 +767,7 @@ void Rainbow::WriteRegister(uint16_t addr, uint8_t value)
 			if(_espEnabled) {
 				_dataSent = false;
 				uint8_t message_length = _mapperRam[0x1800 + (_sendSrcAddr << 8)];
+				if(message_length == 0) break;
 				_esp->rx(message_length);
 				for(uint8_t i = 0; i < message_length; i++) {
 					_esp->rx(_mapperRam[0x1800 + (_sendSrcAddr << 8) + 1 + i]);
