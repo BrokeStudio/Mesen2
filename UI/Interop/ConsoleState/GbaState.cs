@@ -209,6 +209,19 @@ public struct GbaControlManagerState
 	public UInt16 ActiveKeys;
 }
 
+public struct GbaGpioState
+{
+	public byte Data;
+	public byte WritablePins;
+	[MarshalAs(UnmanagedType.I1)] public bool ReadWrite;
+}
+
+public struct GbaCartState
+{
+	[MarshalAs(UnmanagedType.I1)] public bool HasGpio;
+	public GbaGpioState Gpio;
+}
+
 public struct GbaState : BaseState
 {
 	public GbaCpuState Cpu;
@@ -219,6 +232,7 @@ public struct GbaState : BaseState
 	public GbaTimersState Timer;
 	public GbaRomPrefetchState Prefetch;
 	public GbaControlManagerState ControlManager;
+	public GbaCartState Cart;
 }
 
 public enum GbaCpuMode : byte
@@ -292,6 +306,14 @@ public struct GbaCpuState : BaseState
 	public UInt64 CycleCount;
 }
 
+public enum GbaBgStereoMode : byte
+{
+	Disabled,
+	EvenColumns,
+	OddColumns,
+	Both
+}
+
 public struct GbaBgConfig
 {
 	public UInt16 Control;
@@ -309,6 +331,7 @@ public struct GbaBgConfig
 	[MarshalAs(UnmanagedType.I1)] public bool Bpp8Mode;
 	[MarshalAs(UnmanagedType.I1)] public bool Enabled;
 	public byte EnableTimer;
+	public GbaBgStereoMode StereoMode;
 }
 
 public struct GbaTransformConfig
@@ -354,7 +377,7 @@ public struct GbaPpuState : BaseState
 	[MarshalAs(UnmanagedType.I1)] public bool AllowHblankOamAccess;
 	[MarshalAs(UnmanagedType.I1)] public bool ObjVramMappingOneDimension;
 	[MarshalAs(UnmanagedType.I1)] public bool ForcedBlank;
-	[MarshalAs(UnmanagedType.I1)] public bool GreenSwapEnabled;
+	[MarshalAs(UnmanagedType.I1)] public bool StereoscopicEnabled;
 
 	public byte Control2;
 	public byte ObjEnableTimer;
@@ -436,8 +459,12 @@ public struct GbaMemoryManagerState
 
 public struct GbaRomPrefetchState
 {
-	public byte ClockCounter;
 	public UInt32 ReadAddr;
 	public UInt32 PrefetchAddr;
+	public byte ClockCounter;
+	public byte BoundaryCyclePenalty;
 	[MarshalAs(UnmanagedType.I1)] public bool Suspended;
+	[MarshalAs(UnmanagedType.I1)] public bool WasFilled;
+	[MarshalAs(UnmanagedType.I1)] public bool Started;
+	[MarshalAs(UnmanagedType.I1)] public bool Sequential;
 }

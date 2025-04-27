@@ -3,6 +3,7 @@
 #include "GBA/GbaMemoryManager.h"
 #include "GBA/GbaPpu.h"
 #include "GBA/GbaCpu.h"
+#include "GBA/APU/GbaApu.h"
 #include "GBA/Input/GbaController.h"
 #include "GBA/Debugger/DummyGbaCpu.h"
 #include "GBA/Debugger/GbaDebugger.h"
@@ -61,12 +62,17 @@ GbaDebugger::GbaDebugger(Debugger* debugger) : IDebugger(debugger->GetEmulator()
 	_assembler.reset(new GbaAssembler(debugger->GetLabelManager()));
 	
 	_dummyCpu.reset(new DummyGbaCpu());
-	_dummyCpu->Init(_emu, _memoryManager);
+	_dummyCpu->Init(_emu, _memoryManager, nullptr);
 }
 
 GbaDebugger::~GbaDebugger()
 {
 	_codeDataLogger->SaveCdlFile(_cdlFile);
+}
+
+void GbaDebugger::OnBeforeBreak()
+{
+	_console->GetApu()->Run();
 }
 
 void GbaDebugger::Reset()
@@ -265,13 +271,13 @@ void GbaDebugger::ProcessCallStackUpdates(AddressInfo& destAddr, uint32_t destPc
 		uint32_t returnPc = _prevProgramCounter + GbaDisUtils::GetOpSize(_prevOpCode, _prevFlags);
 		AddressInfo src = _memoryManager->GetAbsoluteAddress(_prevProgramCounter);
 		AddressInfo ret = _memoryManager->GetAbsoluteAddress(returnPc);
-		_callstackManager->Push(src, _prevProgramCounter, destAddr, destPc, ret, returnPc, StackFrameFlags::None);
+		_callstackManager->Push(src, _prevProgramCounter, destAddr, destPc, ret, returnPc, 0, StackFrameFlags::None);
 	} else if(GbaDisUtils::IsUnconditionalJump(_prevOpCode, _prevFlags) || GbaDisUtils::IsConditionalJump(_prevOpCode, _prevFlags)) {
 		if(destPc != _prevProgramCounter + GbaDisUtils::GetOpSize(_prevOpCode, _prevFlags)) {
 			//Return instruction used, and PC doesn't match the next instruction, so the ret was (probably) taken (can be conditional)
 			if(_callstackManager->IsReturnAddrMatch(destPc)) {
 				//Only pop top of callstack if the address matches the expected address
-				_callstackManager->Pop(destAddr, destPc);
+				_callstackManager->Pop(destAddr, destPc, 0);
 			}
 		}
 
@@ -284,7 +290,6 @@ void GbaDebugger::ProcessCallStackUpdates(AddressInfo& destAddr, uint32_t destPc
 
 void GbaDebugger::ProcessInterrupt(uint32_t originalPc, uint32_t currentPc, bool forNmi)
 {
-	AddressInfo src = _memoryManager->GetAbsoluteAddress(_prevProgramCounter);
 	AddressInfo ret = _memoryManager->GetAbsoluteAddress(originalPc);
 	AddressInfo dest = _memoryManager->GetAbsoluteAddress(currentPc);
 
@@ -298,7 +303,7 @@ void GbaDebugger::ProcessInterrupt(uint32_t originalPc, uint32_t currentPc, bool
 
 	_debugger->InternalProcessInterrupt(
 		CpuType::Gba, *this, *_step.get(), 
-		src, _prevProgramCounter, dest, currentPc, ret, originalPc, forNmi
+		ret, originalPc, dest, currentPc, ret, originalPc, 0, forNmi
 	);
 }
 
@@ -367,7 +372,12 @@ void GbaDebugger::ResetPrevOpCode()
 
 uint8_t GbaDebugger::GetCpuFlags()
 {
-	return _cpu->GetState().CPSR.Thumb ? GbaCdlFlags::Thumb : 0;
+	switch(_settings->GetDebugConfig().GbaDisMode) {
+		case GbaDisassemblyMode::Default: return _cpu->GetState().CPSR.Thumb ? GbaCdlFlags::Thumb : 0;
+		case GbaDisassemblyMode::Arm: return 0;
+		case GbaDisassemblyMode::Thumb: return GbaCdlFlags::Thumb;
+	}
+	return 0;
 }
 
 BaseEventManager* GbaDebugger::GetEventManager()

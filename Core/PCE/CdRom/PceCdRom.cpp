@@ -24,7 +24,13 @@ PceCdRom::PceCdRom(Emulator* emu, PceConsole* console, DiscInfo& disc) : _disc(d
 
 	//Initialize save ram (2 KB)
 	_saveRamSize = 0x800;
-	_saveRam = new uint8_t[_saveRamSize];
+
+	//Allocate 8kb to fill the entire 8kb bank and behave as if the top 6kb were open bus
+	_saveRam = new uint8_t[0x2000];
+
+	//Init the last 6kb to 0xFF to mimic open bus behavior
+	memset(_saveRam, 0xFF, 0x2000);
+
 	_orgSaveRam = new uint8_t[_saveRamSize];
 	_emu->RegisterMemory(MemoryType::PceSaveRam, _saveRam, _saveRamSize);
 
@@ -97,9 +103,8 @@ uint32_t PceCdRom::GetCurrentSector()
 	}
 }
 
-void PceCdRom::ProcessAudioPlaybackStart()
+void PceCdRom::SetScsiGoodStatus()
 {
-	SetIrqSource(PceCdRomIrqSource::DataTransferDone);
 	_scsi.SetStatusMessage(ScsiStatus::Good, 0);
 }
 
@@ -163,7 +168,7 @@ void PceCdRom::Write(uint16_t addr, uint8_t value)
 			_scsi.SetSignalValue(Rst, reset);
 			_scsi.UpdateState();
 			if(reset) {
-				//Clear enabled IRQs flags for SCSI drive (SubChannel + DataTransferDone + DataTransferReady)
+				//Clear enabled IRQs flags for SCSI drive (SubChannel? + StatusMsgIn + DataIn)
 				_state.EnabledIrqs &= 0x8F;
 				UpdateIrqState();
 			}

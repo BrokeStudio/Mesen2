@@ -10,6 +10,7 @@ class Emulator;
 class Gameboy;
 class SoundMixer;
 class EmuSettings;
+struct GameboyConfig;
 
 class GbApu : public ISerializable
 {
@@ -44,6 +45,9 @@ private:
 	GbApuState _state = {};
 
 	uint8_t InternalRead(uint16_t addr);
+	uint8_t InternalReadCgbRegister(uint16_t addr);
+
+	void UpdateOutput(GameboyConfig& cfg);
 
 public:
 	GbApu();
@@ -68,6 +72,7 @@ public:
 	uint8_t Read(uint16_t addr);
 	void Write(uint16_t addr, uint8_t value);
 
+	uint8_t PeekCgbRegister(uint16_t addr);
 	uint8_t ReadCgbRegister(uint16_t addr);
 
 	template<typename T> void ProcessLengthEnableFlag(uint8_t value, T& length, bool& lengthEnabled, bool& enabled);

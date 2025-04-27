@@ -10,10 +10,10 @@
 #include "Debugger/MemoryDumper.h"
 #include "Debugger/MemoryAccessCounter.h"
 #include "Debugger/ExpressionEvaluator.h"
-#include "Debugger/CodeDataLogger.h"
 #include "NES/NesHeader.h"
 #include "NES/NesConsole.h"
 #include "NES/NesCpu.h"
+#include "NES/APU/NesApu.h"
 #include "NES/NesPpu.h"
 #include "NES/BaseMapper.h"
 #include "NES/NesMemoryManager.h"
@@ -86,6 +86,11 @@ NesDebugger::~NesDebugger()
 	_codeDataLogger->SaveCdlFile(_cdlFile);
 }
 
+void NesDebugger::OnBeforeBreak()
+{
+	_console->GetApu()->Run();
+}
+
 void NesDebugger::Reset()
 {
 	_callstackManager->Clear();
@@ -122,10 +127,11 @@ void NesDebugger::ProcessInstruction()
 		}
 	}
 
-	ProcessCallStackUpdates(addressInfo, pc);
+	ProcessCallStackUpdates(addressInfo, pc, state.SP);
 
 	_prevOpCode = opCode;
 	_prevProgramCounter = pc;
+	_prevStackPointer = state.SP;
 
 	_step->ProcessCpuExec();
 
@@ -134,6 +140,8 @@ void NesDebugger::ProcessInstruction()
 			_step->Break(BreakSource::BreakOnBrk);
 		} else if(_settings->GetDebugConfig().NesBreakOnUnofficialOpCode && NesDisUtils::IsOpUnofficial(opCode)) {
 			_step->Break(BreakSource::BreakOnUnofficialOpCode);
+		} else if(_settings->GetDebugConfig().NesBreakOnUnstableOpCode && NesDisUtils::IsOpUnstable(opCode)) {
+			_step->Break(BreakSource::BreakOnUnstableOpCode);
 		}
 	}
 
@@ -188,7 +196,9 @@ void NesDebugger::ProcessRead(uint32_t addr, uint8_t value, MemoryOperationType 
 		if(operation.Type == MemoryOperationType::DmaRead) {
 			bool isDmcDma = _cpu->IsDmcDma();
 			_eventManager->AddEvent(isDmcDma ? DebugEventType::DmcDmaRead : DebugEventType::DmaRead, operation);
-			if(isDmcDma && addressInfo.Type == MemoryType::NesPrgRom && addressInfo.Address >= 0) {
+			if((addr == 0x4016 || addr == 0x4017) && _settings->CheckDebuggerFlag(DebuggerFlags::NesDebuggerEnabled) && _settings->GetDebugConfig().NesBreakOnDmaInputRead) {
+				_debugger->BreakImmediately(CpuType::Nes, BreakSource::NesDmaInputRead);
+			} else if(isDmcDma && addressInfo.Type == MemoryType::NesPrgRom && addressInfo.Address >= 0) {
 				_codeDataLogger->SetData<NesCdlFlags::PcmData>(addressInfo.Address);
 			}
 		} else if(operation.Type != MemoryOperationType::DummyRead && addressInfo.Type == MemoryType::NesPrgRom && addressInfo.Address >= 0) {
@@ -248,11 +258,16 @@ void NesDebugger::Step(int32_t stepCount, StepType type)
 	StepRequest step(type);
 	switch(type) {
 		case StepType::Step: step.StepCount = stepCount; break;
-		case StepType::StepOut: step.BreakAddress = _callstackManager->GetReturnAddress(); break;
+		case StepType::StepOut:
+			step.BreakAddress = _callstackManager->GetReturnAddress();
+			step.BreakStackPointer = _callstackManager->GetReturnStackPointer();
+			break;
+
 		case StepType::StepOver:
 			if(NesDisUtils::IsJumpToSub(_prevOpCode)) {
 				//JSR, BRK
 				step.BreakAddress = (_prevProgramCounter + NesDisUtils::GetOpSize(_prevOpCode)) & 0xFFFF;
+				step.BreakStackPointer = _prevStackPointer;
 			} else {
 				//For any other instruction, step over is the same as step into
 				step.StepCount = 1;
@@ -282,7 +297,7 @@ void NesDebugger::DrawPartialFrame()
 	_console->GetPpu()->DebugSendFrame();
 }
 
-void NesDebugger::ProcessCallStackUpdates(AddressInfo& destAddr, uint16_t destPc)
+void NesDebugger::ProcessCallStackUpdates(AddressInfo& destAddr, uint16_t destPc, uint8_t sp)
 {
 	if(NesDisUtils::IsJumpToSub(_prevOpCode)) {
 		//JSR
@@ -290,11 +305,11 @@ void NesDebugger::ProcessCallStackUpdates(AddressInfo& destAddr, uint16_t destPc
 		uint32_t returnPc = (_prevProgramCounter + opSize) & 0xFFFF;
 		AddressInfo srcAddress = _mapper->GetAbsoluteAddress(_prevProgramCounter);
 		AddressInfo retAddress = _mapper->GetAbsoluteAddress(returnPc);
-		_callstackManager->Push(srcAddress, _prevProgramCounter, destAddr, destPc, retAddress, returnPc, StackFrameFlags::None);
+		_callstackManager->Push(srcAddress, _prevProgramCounter, destAddr, destPc, retAddress, returnPc, _prevStackPointer, StackFrameFlags::None);
 	} else if(NesDisUtils::IsReturnInstruction(_prevOpCode)) {
 		//RTS, RTI
-		_callstackManager->Pop(destAddr, destPc);
-		if(_step->BreakAddress == (int32_t)destPc) {
+		_callstackManager->Pop(destAddr, destPc, sp);
+		if(_step->BreakAddress == (int32_t)destPc && _step->BreakStackPointer == sp) {
 			//RTS/RTI - if we're on the expected return address, break immediately (for step over/step out)
 			_step->Break(BreakSource::CpuStep);
 		}
@@ -303,7 +318,6 @@ void NesDebugger::ProcessCallStackUpdates(AddressInfo& destAddr, uint16_t destPc
 
 void NesDebugger::ProcessInterrupt(uint32_t originalPc, uint32_t currentPc, bool forNmi)
 {
-	AddressInfo src = _mapper->GetAbsoluteAddress(_prevProgramCounter);
 	AddressInfo ret = _mapper->GetAbsoluteAddress(originalPc);
 	AddressInfo dest = _mapper->GetAbsoluteAddress(currentPc);
 
@@ -311,13 +325,16 @@ void NesDebugger::ProcessInterrupt(uint32_t originalPc, uint32_t currentPc, bool
 		_codeDataLogger->SetCode(dest.Address, CdlFlags::SubEntryPoint);
 	}
 
+	uint8_t originalSp = _cpu->GetState().SP + 3;
+	_prevStackPointer = originalSp;
+
 	//If a call/return occurred just before IRQ, it needs to be processed now
-	ProcessCallStackUpdates(ret, originalPc);
+	ProcessCallStackUpdates(ret, originalPc, originalSp);
 	ResetPrevOpCode();
 
 	_debugger->InternalProcessInterrupt(
 		CpuType::Nes, *this, *_step.get(),
-		src, _prevProgramCounter, dest, currentPc, ret, originalPc, forNmi
+		ret, originalPc, dest, currentPc, ret, originalPc, originalSp, forNmi
 	);
 }
 
@@ -412,6 +429,7 @@ void NesDebugger::SetProgramCounter(uint32_t addr, bool updateDebuggerOnly)
 	}
 	_prevOpCode = _memoryManager->DebugRead(addr);
 	_prevProgramCounter = (uint16_t)addr;
+	_prevStackPointer = _cpu->GetState().SP;
 }
 
 uint32_t NesDebugger::GetProgramCounter(bool getInstPc)
@@ -504,7 +522,8 @@ bool NesDebugger::SaveRomToDisk(string filename, bool saveAsIps, CdlStripOption 
 
 void NesDebugger::GetRomHeader(uint8_t* headerData, uint32_t& size)
 {
-	if(size < sizeof(NesHeader) || _console->GetRomFormat() != RomFormat::iNes) {
+	bool supportedFormat = _console->GetRomFormat() == RomFormat::iNes || _console->GetRomFormat() == RomFormat::VsSystem || _console->GetRomFormat() == RomFormat::VsDualSystem;
+	if(size < sizeof(NesHeader) || !supportedFormat) {
 		size = 0;
 		return;
 	}

@@ -10,6 +10,7 @@ enum class EmulationFlags
 	MaximumSpeed = 0x04,
 	InBackground = 0x08,
 	ConsoleMode = 0x10,
+	TestMode = 0x20,
 };
 
 enum class ScaleFilterType
@@ -437,11 +438,17 @@ enum class GbaSaveType
 	Flash128
 };
 
+enum class GbaRtcType
+{
+	AutoDetect = 0,
+	Enabled = 1,
+	Disabled = 2,
+};
+
 enum class GbaCartridgeType
 {
 	Default,
-	TiltSensor,
-	Rtc
+	TiltSensor
 };
 
 struct GbaConfig
@@ -459,6 +466,7 @@ struct GbaConfig
 
 	RamState RamPowerOnState = RamState::AllZeros;
 	GbaSaveType SaveType = GbaSaveType::AutoDetect;
+	GbaRtcType RtcType = GbaRtcType::AutoDetect;
 	bool AllowInvalidInput = false;
 	bool EnableMgbaLogApi = false;
 
@@ -490,6 +498,7 @@ struct PcEngineConfig
 	ControllerConfig Port1;
 	ControllerConfig Port1SubPorts[5];
 
+	bool AllowInvalidInput = false;
 	bool PreventSelectRunReset = false;
 
 	PceConsoleType ConsoleType = PceConsoleType::Auto;
@@ -522,6 +531,7 @@ enum class DspInterpolationType
 {
 	Gauss,
 	Cubic,
+	Sinc,
 	None
 };
 
@@ -535,6 +545,7 @@ struct SnesConfig
 
 	ConsoleRegion Region = ConsoleRegion::Auto;
 
+	bool AllowInvalidInput = false;
 	bool BlendHighResolutionModes = false;
 	bool HideBgLayer1 = false;
 	bool HideBgLayer2 = false;
@@ -625,9 +636,11 @@ struct NesConfig
 	bool AllowInvalidInput = false;
 	bool DisableGameGenieBusConflicts = false;
 	bool DisableFlashSaves = false;
+	bool OverwriteOriginalRom = false;
 
 	bool EnableOamDecay = false;
 	bool EnablePpuOamRowCorruption = false;
+	bool EnablePpuSpriteEvalBug = false;
 	bool DisableOamAddrBug = false;
 	bool DisablePaletteRead = false;
 	bool DisablePpu2004Reads = false;
@@ -648,6 +661,7 @@ struct NesConfig
 	bool ReduceDmcPopping = false;
 	bool SilenceTriangleHighFreq = false;
 	bool SwapDutyCycles = false;
+	bool ReverseDpcmBitOrder = false;
 
 	bool BreakOnCrash = false;
 
@@ -685,6 +699,7 @@ struct SmsConfig
 
 	SmsRevision Revision = SmsRevision::Compatibility;
 
+	bool AllowInvalidInput = false;
 	bool UseSgPalette = false;
 	bool GgBlendFrames = true;
 	bool RemoveSpriteLimit = false;
@@ -761,6 +776,13 @@ struct AudioPlayerConfig
 	bool Shuffle = false;
 };
 
+enum class GbaDisassemblyMode : uint8_t
+{
+	Default,
+	Arm,
+	Thumb
+};
+
 struct DebugConfig
 {
 	bool BreakOnUninitRead = false;
@@ -786,8 +808,13 @@ struct DebugConfig
 	bool SnesBreakOnCop = false;
 	bool SnesBreakOnWdm = false;
 	bool SnesBreakOnStp = false;
+	bool SnesBreakOnInvalidPpuAccess = false;
+	bool SnesBreakOnReadDuringAutoJoy = false;
 	bool SnesUseAltSpcOpNames = false;
 	bool SnesIgnoreDspReadWrites = false;
+
+	bool SpcBreakOnBrk = false;
+	bool SpcBreakOnStpSleep = false;
 
 	bool GbBreakOnInvalidOamAccess = false;
 	bool GbBreakOnInvalidVramAccess = false;
@@ -798,12 +825,15 @@ struct DebugConfig
 
 	bool NesBreakOnBrk = false;
 	bool NesBreakOnUnofficialOpCode = false;
+	bool NesBreakOnUnstableOpCode = false;
 	bool NesBreakOnCpuCrash = false;
 	bool NesBreakOnBusConflict = false;
 	bool NesBreakOnDecayedOamRead = false;
-	bool NesBreakOnPpu2000ScrollGlitch = false;
-	bool NesBreakOnPpu2006ScrollGlitch = false;
+	bool NesBreakOnPpuScrollGlitch = false;
 	bool NesBreakOnExtOutputMode = false;
+	bool NesBreakOnInvalidVramAccess = false;
+	bool NesBreakOnInvalidOamWrite = false;
+	bool NesBreakOnDmaInputRead = false;
 
 	bool PceBreakOnBrk = false;
 	bool PceBreakOnUnofficialOpCode = false;
@@ -814,6 +844,7 @@ struct DebugConfig
 	bool GbaBreakOnNopLoad = false;
 	bool GbaBreakOnInvalidOpCode = false;
 	bool GbaBreakOnUnalignedMemAccess = false;
+	GbaDisassemblyMode GbaDisMode;
 	
 	bool WsBreakOnInvalidOpCode = false;
 
@@ -1055,10 +1086,11 @@ enum class DebuggerFlags
 	GsuDebuggerEnabled = (1 << 3),
 	NecDspDebuggerEnabled = (1 << 4),
 	Cx4DebuggerEnabled = (1 << 5),
-	GbDebuggerEnabled = (1 << 6),
-	NesDebuggerEnabled = (1 << 7),
-	PceDebuggerEnabled = (1 << 8),
-	SmsDebuggerEnabled = (1 << 9),
-	GbaDebuggerEnabled = (1 << 10),
-	WsDebuggerEnabled = (1 << 11),
+	St018DebuggerEnabled = (1 << 6),
+	GbDebuggerEnabled = (1 << 7),
+	NesDebuggerEnabled = (1 << 8),
+	PceDebuggerEnabled = (1 << 9),
+	SmsDebuggerEnabled = (1 << 10),
+	GbaDebuggerEnabled = (1 << 11),
+	WsDebuggerEnabled = (1 << 12),
 };

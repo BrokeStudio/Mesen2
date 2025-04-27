@@ -28,6 +28,8 @@ public class SnesRegisterViewer
 			tabs.Add(GbRegisterViewer.GetGbMiscTab(ref gbState, tabPrefix));
 		} else if(cpuTypes.Contains(CpuType.Gsu)) {
 			tabs.Add(GetSnesGsuTab(ref snesState.Gsu));
+		} else if(cpuTypes.Contains(CpuType.St018)) {
+			tabs.Add(GetSnesSt018Tab(ref snesState.St018));
 		}
 
 		return tabs;
@@ -64,9 +66,30 @@ public class SnesRegisterViewer
 		return new RegisterViewerTab("GSU", entries);
 	}
 
+	private static RegisterViewerTab GetSnesSt018Tab(ref St018State state)
+	{
+		List<RegEntry> entries = new List<RegEntry>() {
+			new RegEntry("", "SNES Registers"),
+			new RegEntry("$3800", "ARM -> SNES Data", state.DataSnes),
+			new RegEntry("$3804.0", "ARM -> SNES Data Ready", state.HasDataForSnes),
+			new RegEntry("$3804.2", "Ack", state.Ack),
+			new RegEntry("$3804.3", "SNES -> ARM Data Ready", state.HasDataForArm),
+			new RegEntry("$3804.7", "ARM CPU Reset", state.ArmReset),
+
+			new RegEntry("", "ST018 Registers"),
+			new RegEntry("$40000010", "ARM -> SNES Data", state.DataArm),
+			new RegEntry("$40000020.0", "ARM -> SNES Data Ready", state.HasDataForSnes),
+			new RegEntry("$40000020.2", "Ack", state.Ack),
+			new RegEntry("$40000020.3", "SNES -> ARM Data Ready", state.HasDataForArm),
+			new RegEntry("$40000020.7", "ARM CPU Reset", state.ArmReset),
+		};
+
+		return new RegisterViewerTab("ST018", entries);
+	}
+
 	private static RegisterViewerTab GetSnesSa1Tab(ref SnesState state)
 	{
-		Sa1State sa1 = state.Sa1.Sa1;
+		Sa1State sa1 = state.Sa1;
 
 		List<RegEntry> entries = new List<RegEntry>() {
 			new RegEntry("$2200", "SA-1 CPU Control"),
@@ -85,8 +108,8 @@ public class SnesRegisterViewer
 			new RegEntry("$2202.7", "IRQ Flag", sa1.CpuIrqRequested),
 
 			new RegEntry("$2203/4", "SA-1 Reset Vector", sa1.Sa1ResetVector, Format.X16),
-			new RegEntry("$2205/6", "SA-1 NMI Vector", sa1.Sa1ResetVector, Format.X16),
-			new RegEntry("$2207/8", "SA-1 IRQ Vector", sa1.Sa1ResetVector, Format.X16),
+			new RegEntry("$2205/6", "SA-1 NMI Vector", sa1.Sa1NmiVector, Format.X16),
+			new RegEntry("$2207/8", "SA-1 IRQ Vector", sa1.Sa1IrqVector, Format.X16),
 
 			new RegEntry("$2209", "S-CPU Control"),
 			new RegEntry("$2209.0-3", "Message", sa1.CpuMessageReceived, Format.X8),
@@ -490,17 +513,26 @@ public class SnesRegisterViewer
 			new RegEntry("$F8", "RAM Reg 0", spc.RamReg[0], Format.X8),
 			new RegEntry("$F9", "RAM Reg 1", spc.RamReg[1], Format.X8),
 
-			new RegEntry("$FA - $FF", "Timers"),
-			new RegEntry("$FA", "Timer 0 Divider", spc.Timer0.Target, Format.X8),
-			new RegEntry("$FA", "Timer 0 Frequency", GetTimerFrequency(8000, spc.Timer0.Target), spc.Timer0.Target),
-			new RegEntry("$FB", "Timer 1 Divider", spc.Timer1.Target, Format.X8),
-			new RegEntry("$FB", "Timer 1 Frequency", GetTimerFrequency(8000, spc.Timer1.Target), spc.Timer1.Target),
-			new RegEntry("$FC", "Timer 2 Divider", spc.Timer2.Target, Format.X8),
-			new RegEntry("$FC", "Timer 2 Frequency", GetTimerFrequency(64000, spc.Timer2.Target), spc.Timer2.Target),
+			new RegEntry("", "Timer 0"),
+			new RegEntry("$F1.0", "Enabled", spc.Timer0.Enabled),
+			new RegEntry("$FA", "Divider", spc.Timer0.Target, Format.X8),
+			new RegEntry("$FD", "Output", spc.Timer0.Output, Format.X8),
+			new RegEntry("", "Timer", spc.Timer0.Stage2, Format.X8),
+			new RegEntry("", "Frequency", GetTimerFrequency(8000, spc.Timer0.Target), spc.Timer0.Target),
 
-			new RegEntry("$FD", "Timer 0 Output", spc.Timer0.Output, Format.X8),
-			new RegEntry("$FE", "Timer 1 Output", spc.Timer1.Output, Format.X8),
-			new RegEntry("$FF", "Timer 2 Output", spc.Timer2.Output, Format.X8),
+			new RegEntry("", "Timer 1"),
+			new RegEntry("$F1.1", "Enabled", spc.Timer1.Enabled),
+			new RegEntry("$FB", "Divider", spc.Timer1.Target, Format.X8),
+			new RegEntry("$FE", "Output", spc.Timer1.Output, Format.X8),
+			new RegEntry("", "Timer", spc.Timer1.Stage2, Format.X8),
+			new RegEntry("", "Frequency", GetTimerFrequency(8000, spc.Timer1.Target), spc.Timer1.Target),
+
+			new RegEntry("", "Timer 2"),
+			new RegEntry("$F1.2", "Enabled", spc.Timer2.Enabled),
+			new RegEntry("$FC", "Divider", spc.Timer2.Target, Format.X8),
+			new RegEntry("$FF", "Output", spc.Timer2.Output, Format.X8),
+			new RegEntry("", "Timer", spc.Timer2.Stage2, Format.X8),
+			new RegEntry("", "Frequency", GetTimerFrequency(64000, spc.Timer2.Target), spc.Timer2.Target),
 		};
 
 		return new RegisterViewerTab("SPC", entries, CpuType.Spc, MemoryType.SpcMemory);

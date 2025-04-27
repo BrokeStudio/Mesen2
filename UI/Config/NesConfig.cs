@@ -63,6 +63,7 @@ namespace Mesen.Config
 		//Emulation
 		[Reactive] public bool EnableOamDecay { get; set; } = false;
 		[Reactive] public bool EnablePpuOamRowCorruption { get; set; } = false;
+		[Reactive] public bool EnablePpuSpriteEvalBug { get; set; } = false;
 		[Reactive] public bool DisableOamAddrBug { get; set; } = false;
 		[Reactive] public bool DisablePaletteRead { get; set; } = false;
 		[Reactive] public bool DisablePpu2004Reads { get; set; } = false;
@@ -77,6 +78,7 @@ namespace Mesen.Config
 		[Reactive] public bool AllowInvalidInput { get; set; } = false;
 		[Reactive] public bool DisableGameGenieBusConflicts { get; set; } = false;
 		[Reactive] public bool DisableFlashSaves { get; set; } = false;
+		[Reactive] public bool OverwriteOriginalRom { get; set; } = false;
 
 		[Reactive] public bool RandomizeMapperPowerOnState { get; set; } = false;
 		[Reactive] public bool RandomizeCpuPpuAlignment { get; set; } = false;
@@ -90,6 +92,7 @@ namespace Mesen.Config
 		[Reactive] public bool ReduceDmcPopping { get; set; } = false;
 		[Reactive] public bool SilenceTriangleHighFreq { get; set; } = false;
 		[Reactive] public bool SwapDutyCycles { get; set; } = false;
+		[Reactive] public bool ReverseDpcmBitOrder { get; set; } = false;
 
 		[Reactive] [MinMax(0, 100)] public UInt32 Square1Volume { get; set; } = 100;
 		[Reactive] [MinMax(0, 100)] public UInt32 Square2Volume { get; set; } = 100;
@@ -183,9 +186,11 @@ namespace Mesen.Config
 				AllowInvalidInput = AllowInvalidInput,
 				DisableGameGenieBusConflicts = DisableGameGenieBusConflicts,
 				DisableFlashSaves = DisableFlashSaves,
+				OverwriteOriginalRom = OverwriteOriginalRom,
 
 				EnableOamDecay = EnableOamDecay,
 				EnablePpuOamRowCorruption = EnablePpuOamRowCorruption,
+				EnablePpuSpriteEvalBug = EnablePpuSpriteEvalBug,
 				DisableOamAddrBug = DisableOamAddrBug,
 				DisablePaletteRead = DisablePaletteRead,
 				DisablePpu2004Reads = DisablePpu2004Reads,
@@ -206,6 +211,7 @@ namespace Mesen.Config
 				ReduceDmcPopping = ReduceDmcPopping,
 				SilenceTriangleHighFreq = SilenceTriangleHighFreq,
 				SwapDutyCycles = SwapDutyCycles,
+				ReverseDpcmBitOrder = ReverseDpcmBitOrder,
 
 				Square1Volume = Square1Volume,
 				Square2Volume = Square2Volume,
@@ -317,9 +323,11 @@ namespace Mesen.Config
 		[MarshalAs(UnmanagedType.I1)] public bool AllowInvalidInput;
 		[MarshalAs(UnmanagedType.I1)] public bool DisableGameGenieBusConflicts;
 		[MarshalAs(UnmanagedType.I1)] public bool DisableFlashSaves;
-		
+		[MarshalAs(UnmanagedType.I1)] public bool OverwriteOriginalRom;
+
 		[MarshalAs(UnmanagedType.I1)] public bool EnableOamDecay;
 		[MarshalAs(UnmanagedType.I1)] public bool EnablePpuOamRowCorruption;
+		[MarshalAs(UnmanagedType.I1)] public bool EnablePpuSpriteEvalBug;
 		[MarshalAs(UnmanagedType.I1)] public bool DisableOamAddrBug;
 		[MarshalAs(UnmanagedType.I1)] public bool DisablePaletteRead;
 		[MarshalAs(UnmanagedType.I1)] public bool DisablePpu2004Reads;
@@ -340,6 +348,7 @@ namespace Mesen.Config
 		[MarshalAs(UnmanagedType.I1)] public bool ReduceDmcPopping;
 		[MarshalAs(UnmanagedType.I1)] public bool SilenceTriangleHighFreq;
 		[MarshalAs(UnmanagedType.I1)] public bool SwapDutyCycles;
+		[MarshalAs(UnmanagedType.I1)] public bool ReverseDpcmBitOrder;
 
 		[MarshalAs(UnmanagedType.I1)] public bool BreakOnCrash;
 

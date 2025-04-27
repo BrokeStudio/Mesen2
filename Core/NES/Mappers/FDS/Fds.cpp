@@ -15,6 +15,7 @@
 #include "Shared/FirmwareHelper.h"
 #include "Utilities/Patches/IpsPatcher.h"
 #include "Utilities/Serializer.h"
+#include "Utilities/StringUtilities.h"
 
 void Fds::InitMapper()
 {
@@ -44,12 +45,13 @@ void Fds::InitMapper()
 void Fds::InitMapper(RomData &romData)
 {
 	_audio.reset(new FdsAudio(_console));
-	_romFilepath = romData.Info.Filename;
 	_fdsDiskSides = romData.FdsDiskData;
 	_fdsDiskHeaders = romData.FdsDiskHeaders;
 	_fdsRawData = romData.RawData;
+	string filename = StringUtilities::ToLower(romData.Info.Filename);
+	_useQdFormat = StringUtilities::EndsWith(filename, ".qd");
 
-	FdsLoader loader;
+	FdsLoader loader(_useQdFormat);
 	loader.LoadDiskData(_fdsRawData, _orgDiskSides, _orgDiskHeaders);
 	
 	//Apply save data (saved as an IPS file), if found
@@ -69,28 +71,33 @@ void Fds::LoadDiskData(vector<uint8_t> ipsData)
 	_fdsDiskSides.clear();
 	_fdsDiskHeaders.clear();
 	
-	FdsLoader loader;
-	vector<uint8_t> patchedData;
-	if(ipsData.size() > 0 && IpsPatcher::PatchBuffer(ipsData, _fdsRawData, patchedData)) {
-		loader.LoadDiskData(patchedData, _fdsDiskSides, _fdsDiskHeaders);
-	} else {
+	FdsLoader loader(_useQdFormat);
+	if(_settings->OverwriteOriginalRom) {
 		loader.LoadDiskData(_fdsRawData, _fdsDiskSides, _fdsDiskHeaders);
+	} else {
+		vector<uint8_t> patchedData;
+		if(ipsData.size() > 0 && IpsPatcher::PatchBuffer(ipsData, _fdsRawData, patchedData)) {
+			loader.LoadDiskData(patchedData, _fdsDiskSides, _fdsDiskHeaders);
+		} else {
+			loader.LoadDiskData(_fdsRawData, _fdsDiskSides, _fdsDiskHeaders);
+		}
 	}
-}
-
-vector<uint8_t> Fds::CreateIpsPatch()
-{
-	FdsLoader loader;
-	bool needHeader = (memcmp(_fdsRawData.data(), "FDS\x1a", 4) == 0);
-	vector<uint8_t> newData = loader.RebuildFdsFile(_fdsDiskSides, needHeader);	
-	return IpsPatcher::CreatePatch(_fdsRawData, newData);
 }
 
 void Fds::SaveBattery()
 {
 	if(_needSave) {
-		vector<uint8_t> ipsData = CreateIpsPatch();
-		_emu->GetBatteryManager()->SaveBattery(".ips", ipsData.data(), (uint32_t)ipsData.size());
+		FdsLoader loader(_useQdFormat);
+		bool needHeader = (memcmp(_fdsRawData.data(), "FDS\x1a", 4) == 0);
+		vector<uint8_t> newData = loader.RebuildFdsFile(_fdsDiskSides, needHeader);
+
+		if(_settings->OverwriteOriginalRom) {
+			ofstream file(_emu->GetRomInfo().RomFile, ios::binary);
+			file.write((char*)newData.data(), newData.size());
+		} else {
+			vector<uint8_t> ipsData = IpsPatcher::CreatePatch(_fdsRawData, newData);
+			_emu->GetBatteryManager()->SaveBattery(".ips", ipsData.data(), (uint32_t)ipsData.size());
+		}
 		_needSave = false;
 	}
 }
@@ -120,9 +127,10 @@ void Fds::WriteFdsDisk(uint8_t value)
 {
 	assert(_diskNumber < _fdsDiskSides.size());
 	assert(_diskPosition < _fdsDiskSides[_diskNumber].size());
-	uint8_t currentValue = _fdsDiskSides[_diskNumber][_diskPosition - 2];
+
+	uint8_t currentValue = _fdsDiskSides[_diskNumber][_diskPosition];
 	if(currentValue != value) {
-		_fdsDiskSides[_diskNumber][_diskPosition - 2] = value;
+		_fdsDiskSides[_diskNumber][_diskPosition] = value;
 		_needSave = true;
 	}
 }
@@ -300,6 +308,7 @@ void Fds::ProcessCpuClock()
 			if(!_diskReady) {
 				_gapEnded = false;
 				_crcAccumulator = 0;
+				_badCrc = false;
 			} else if(diskData && !_gapEnded) {
 				_gapEnded = true;
 				needIrq = false;
@@ -312,6 +321,10 @@ void Fds::ProcessCpuClock()
 					_cpu->SetIrqSource(IRQSource::FdsDisk);
 				}
 			}
+
+			if(!_previousCrcControlFlag && _crcControl) {
+				_badCrc = _crcAccumulator != 0;
+			}
 		} else {
 			if(!_crcControl) {
 				_transferComplete = true;
@@ -323,22 +336,19 @@ void Fds::ProcessCpuClock()
 
 			if(!_diskReady) {
 				diskData = 0x00;
+				_crcAccumulator = 0;
 			}
 
 			if(!_crcControl) {
 				UpdateCrc(diskData);
 			} else {
-				if(!_previousCrcControlFlag) {
-					//Finish CRC calculation
-					UpdateCrc(0x00);
-					UpdateCrc(0x00);
-				}
 				diskData = _crcAccumulator & 0xFF;
 				_crcAccumulator >>= 8;
 			}
 
 			WriteFdsDisk(diskData);
 			_gapEnded = false;
+			_badCrc = false;
 		}
 
 		_previousCrcControlFlag = _crcControl;
@@ -346,6 +356,12 @@ void Fds::ProcessCpuClock()
 		_diskPosition++;
 		if(_diskPosition >= GetFdsDiskSideSize(_diskNumber)) {
 			_motorOn = false;
+			if(_diskIrqEnabled) {
+				//"Kosodate Gokko" disk copier seems to expect an IRQ to happen
+				//around the time the drive reaches the end of the disk
+				//Without this, the software locks up on a black screen
+				_cpu->SetIrqSource(IRQSource::FdsDisk);
+			}
 
 			//Wait a bit before ejecting the disk (eject in ~77 frames)
 			_autoDiskEjectCounter = 77;
@@ -363,15 +379,12 @@ void Fds::ProcessCpuClock()
 
 void Fds::UpdateCrc(uint8_t value)
 {
-	for(uint16_t n = 0x01; n <= 0x80; n <<= 1) {
+	_crcAccumulator ^= value;
+	for(uint16_t n = 0; n < 8; n++) {
 		uint8_t carry = (_crcAccumulator & 1);
 		_crcAccumulator >>= 1;
 		if(carry) {
 			_crcAccumulator ^= 0x8408;
-		}
-
-		if(value & n) {
-			_crcAccumulator ^= 0x8000;
 		}
 	}
 }
@@ -457,11 +470,12 @@ uint8_t Fds::ReadRegister(uint16_t addr)
 		switch(addr) {
 			case 0x4030:
 				//These 3 pins are open bus
-				value &= 0x2C;
+				value &= 0x24;
 
 				value |= _cpu->HasIrqSource(IRQSource::External) ? 0x01 : 0x00;
 				value |= _transferComplete ? 0x02 : 0x00;
-				value |= _badCrc ? 0x10 : 0x00;
+				value |= GetMirroringType() == MirroringType::Horizontal ? 0x08 : 0;
+				value |= _useQdFormat && _badCrc ? 0x10 : 0x00;
 				//value |= _endOfHead ? 0x40 : 0x00;
 				//value |= _diskRegEnabled ? 0x80 : 0x00;
 

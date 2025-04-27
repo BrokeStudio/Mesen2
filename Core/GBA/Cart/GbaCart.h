@@ -42,7 +42,9 @@ public:
 	GbaCart();
 	~GbaCart();
 
-	void Init(Emulator* emu, GbaConsole* console, GbaMemoryManager* memoryManager, GbaSaveType saveType, GbaCartridgeType cartType);
+	GbaCartState GetState();
+
+	void Init(Emulator* emu, GbaConsole* console, GbaMemoryManager* memoryManager, GbaSaveType saveType, GbaRtcType rtcType, GbaCartridgeType cartType);
 
 	template<bool checkEeprom>
 	__forceinline uint8_t ReadRom(uint32_t addr)

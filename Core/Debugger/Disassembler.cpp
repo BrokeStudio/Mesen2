@@ -9,10 +9,12 @@
 #include "Debugger/CodeDataLogger.h"
 #include "Debugger/DebugBreakHelper.h"
 #include "Debugger/DebugUtilities.h"
+#include "Debugger/IDebugger.h"
 #include "SNES/SnesCpuTypes.h"
 #include "SNES/SpcTypes.h"
 #include "SNES/Coprocessors/GSU/GsuTypes.h"
 #include "SNES/Coprocessors/CX4/Cx4Types.h"
+#include "SNES/Coprocessors/ST018/ArmV3Types.h"
 #include "Gameboy/GbTypes.h"
 #include "GBA/GbaTypes.h"
 #include "NES/NesTypes.h"
@@ -312,6 +314,8 @@ void Disassembler::GetLineData(DisassemblyResult& row, CpuType type, MemoryType 
 	data.Flags = row.Flags;
 	data.LineCpuType = type;
 
+	//TODO move color logic to UI and complete missing data?
+
 	switch(row.Address.Type) {
 		default: break;
 		case MemoryType::GbPrgRom:
@@ -461,6 +465,27 @@ void Disassembler::GetLineData(DisassemblyResult& row, CpuType type, MemoryType 
 					break;
 				}
 
+				case CpuType::St018:
+				{
+					ArmV3CpuState state = (ArmV3CpuState&)_debugger->GetCpuStateRef(lineCpuType);
+					if(!disInfo.IsInitialized()) {
+						disInfo = DisassemblyInfo(row.Address.Address, state.CPSR.ToInt32(), CpuType::St018, row.Address.Type, _memoryDumper);
+					} else {
+						data.Flags |= LineFlags::VerifiedCode;
+					}
+
+					data.OpSize = disInfo.GetOpSize();
+
+					state.Pipeline.Execute.Address = (uint32_t)row.CpuAddress;
+					state.R[15] = state.Pipeline.Execute.Address + (data.OpSize * 2);
+
+					data.EffectiveAddress = disInfo.GetEffectiveAddress(_debugger, &state, lineCpuType);
+					if(showMemoryValues && data.EffectiveAddress.ValueSize >= 0) {
+						data.Value = disInfo.GetMemoryValue(data.EffectiveAddress, _memoryDumper, memType);
+					}
+					break;
+				}
+
 				case CpuType::Gameboy:
 				{
 					GbCpuState state = (GbCpuState&)_debugger->GetCpuStateRef(lineCpuType);
@@ -547,7 +572,7 @@ void Disassembler::GetLineData(DisassemblyResult& row, CpuType type, MemoryType 
 
 					CodeDataLogger* cdl = cdlManager->GetCodeDataLogger(row.Address.Type);
 					if(!disInfo.IsInitialized()) {
-						disInfo = DisassemblyInfo(row.Address.Address, state.CPSR.ToInt32(), CpuType::Gba, row.Address.Type, _memoryDumper);
+						disInfo = DisassemblyInfo(row.Address.Address, _debugger->GetMainDebugger()->GetCpuFlags(), CpuType::Gba, row.Address.Type, _memoryDumper);
 					} else {
 						data.Flags |= (!cdl || cdl->IsCode(data.AbsoluteAddress.Address)) ? LineFlags::VerifiedCode : LineFlags::UnexecutedCode;
 					}

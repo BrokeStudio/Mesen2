@@ -74,7 +74,7 @@ void RewindManager::ProcessNotification(ConsoleNotificationType type, void * par
 					_framesToFastForward--;
 					_currentHistory.FrameCount++;
 					if(_framesToFastForward == 0) {
-						for(int i = 0; i < 4; i++) {
+						for(int i = 0; i < BaseControlDevice::PortCount; i++) {
 							size_t numberToRemove = _currentHistory.InputLogs[i].size();
 							_currentHistory.InputLogs[i] = _historyBackup.front().InputLogs[i];
 							for(size_t j = 0; j < numberToRemove; j++) {
@@ -188,6 +188,11 @@ void RewindManager::Start(bool forDebugger)
 
 void RewindManager::InternalStart(bool forDebugger)
 {
+	if(_history.empty() && _currentHistory.FrameCount <= 0 && !forDebugger) {
+		//No data in history, can't rewind
+		return;
+	}
+
 	_rewindState = forDebugger ? RewindState::Debugging : RewindState::Starting;
 	_videoHistoryBuilder.clear();
 	_videoHistory.clear();
@@ -402,11 +407,15 @@ void RewindManager::RecordInput(vector<shared_ptr<BaseControlDevice>> devices)
 bool RewindManager::SetInput(BaseControlDevice *device)
 {
 	uint8_t port = device->GetPort();
-	if(!_currentHistory.InputLogs[port].empty() && IsRewinding()) {
-		ControlDeviceState state = _currentHistory.InputLogs[port].front();
-		_currentHistory.InputLogs[port].pop_front();
-		device->SetRawState(state);
-		return true;
+	if(IsRewinding()) {
+		if(!_currentHistory.InputLogs[port].empty()) {
+			ControlDeviceState state = _currentHistory.InputLogs[port].front();
+			_currentHistory.InputLogs[port].pop_front();
+			device->SetRawState(state);
+			return true;
+		} else {
+			return false;
+		}
 	} else {
 		return false;
 	}

@@ -243,6 +243,7 @@
 #include "NES/Mappers/Unlicensed/Mapper60.h"
 #include "NES/Mappers/Unlicensed/Mapper62.h"
 #include "NES/Mappers/Unlicensed/Mapper83.h"
+#include "NES/Mappers/Unlicensed/Mapper487.h"
 #include "NES/Mappers/Unlicensed/Nanjing.h"
 #include "NES/Mappers/Unlicensed/Nina01.h"
 #include "NES/Mappers/Unlicensed/Nina03_06.h"
@@ -488,7 +489,6 @@ BaseMapper* MapperFactory::GetMapperFromID(RomData &romData)
 		case 217: return new MMC3_217();
 		case 218: return new MagicFloor218();
 		case 219: return new MMC3_219();
-		case 220: return new Kaiser7057();
 		case 221: return new Mapper221();
 		case 222: return new Mapper222();
 		case 224: return new MMC3_224();
@@ -601,6 +601,8 @@ BaseMapper* MapperFactory::GetMapperFromID(RomData &romData)
 		case 350: break; //891227
 
 		case 366: return new BmcGn45();
+
+		case 487: return new Mapper487();
 
 		case 513: return new Sachen9602();
 		//514-517

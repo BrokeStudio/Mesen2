@@ -131,10 +131,19 @@ public class CommandLineHelper
 	{
 		if(LuaScriptsToLoad.Count > 0) {
 			foreach(string luaScript in LuaScriptsToLoad) {
-				ScriptWindowViewModel model = new();
+				ScriptWindow? existingWnd = DebugWindowManager.GetDebugWindow<ScriptWindow>(wnd => !string.IsNullOrWhiteSpace(wnd.Model.FilePath) && Path.GetFullPath(wnd.Model.FilePath) == Path.GetFullPath(luaScript));
+				if(existingWnd != null) {
+					//Script is already opened, skip it
+					continue;
+				}
+
+				ScriptWindowViewModel model = new(null);
 				model.LoadScript(luaScript);
 				DebugWindowManager.OpenDebugWindow(() => new ScriptWindow(model));
 			}
+
+			//Shift focus back to main window after opening the script window(s)
+			wnd.BringToFront();
 		}
 
 		if(MovieToRecord != null) {
@@ -182,13 +191,14 @@ public class CommandLineHelper
 		result["Input"] = GetSwichesForObject("input.", typeof(InputConfig));
 		result["Video"] = GetSwichesForObject("video.", typeof(VideoConfig));
 		result["Preferences"] = GetSwichesForObject("preferences.", typeof(PreferencesConfig));
-		result["Nes"] = GetSwichesForObject("nes.", typeof(NesConfig));
-		result["Snes"] = GetSwichesForObject("snes.", typeof(SnesConfig));
+		result["NES"] = GetSwichesForObject("nes.", typeof(NesConfig));
+		result["SNES"] = GetSwichesForObject("snes.", typeof(SnesConfig));
 		result["Game Boy"] = GetSwichesForObject("gameBoy.", typeof(GameboyConfig));
 		result["GBA"] = GetSwichesForObject("gba.", typeof(GbaConfig));
 		result["PC Engine"] = GetSwichesForObject("pcEngine.", typeof(PcEngineConfig));
 		result["SMS"] = GetSwichesForObject("sms.", typeof(SmsConfig));
 		result["WS"] = GetSwichesForObject("ws.", typeof(WsConfig));
+		result["CV"] = GetSwichesForObject("cv.", typeof(CvConfig));
 
 		return result;
 	}

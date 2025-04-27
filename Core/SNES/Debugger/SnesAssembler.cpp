@@ -56,9 +56,12 @@ AssemblerSpecialCodes SnesAssembler::ResolveOpMode(AssemblerLineData& op, uint32
 		op.AddrMode = SnesAddrMode::BlkMov;
 	} else if(operand.IsImmediate) {
 		//Imm16, Imm8, Rel
-		if(operand.HasParenOrBracket() || operand.ByteCount > 2 || op.OperandCount > 1) {
+		if(operand.ByteCount > 2) {
+			return AssemblerSpecialCodes::OperandOutOfRange;
+		} else if(operand.HasParenOrBracket() || op.OperandCount > 1) {
 			return AssemblerSpecialCodes::ParsingError;
 		}
+
 		if(IsOpModeAvailable(op.OpCode, SnesAddrMode::Rel)) {
 			op.AddrMode = SnesAddrMode::Rel;
 		} else {
@@ -79,7 +82,12 @@ AssemblerSpecialCodes SnesAssembler::ResolveOpMode(AssemblerLineData& op, uint32
 				if(op.OperandCount > 1) {
 					return AssemblerSpecialCodes::ParsingError;
 				}
-				op.AddrMode = operand.ByteCount == 1 ? SnesAddrMode::DirIndLng : SnesAddrMode::AbsIndLng;
+
+				if(operand.ByteCount == 1) {
+					AdjustOperandSize(op, operand, SnesAddrMode::DirIndLng, SnesAddrMode::AbsIndLng);
+				} else {
+					op.AddrMode = SnesAddrMode::AbsIndLng;
+				}
 			}
 		} else {
 			return AssemblerSpecialCodes::ParsingError;
@@ -93,10 +101,19 @@ AssemblerSpecialCodes SnesAssembler::ResolveOpMode(AssemblerLineData& op, uint32
 				if(op.OperandCount > 1) {
 					return AssemblerSpecialCodes::ParsingError;
 				}
-				op.AddrMode = operand.ByteCount == 1 ? SnesAddrMode::DirInd : SnesAddrMode::AbsInd;
+
+				if(operand.ByteCount == 1) {
+					AdjustOperandSize(op, operand, SnesAddrMode::DirInd, SnesAddrMode::AbsInd);
+				} else {
+					op.AddrMode = SnesAddrMode::AbsInd;
+				}
 			}
 		} else if(operand2.Type == OperandType::X && operand2.HasClosingParenthesis) {
-			op.AddrMode = operand.ByteCount == 1 ? SnesAddrMode::DirIdxIndX : SnesAddrMode::AbsIdxXInd;
+			if(operand.ByteCount == 1) {
+				AdjustOperandSize(op, operand, SnesAddrMode::DirIdxIndX, SnesAddrMode::AbsIdxXInd);
+			} else {
+				op.AddrMode = SnesAddrMode::AbsIdxXInd;
+			}
 		} else {
 			return AssemblerSpecialCodes::ParsingError;
 		}
@@ -105,14 +122,14 @@ AssemblerSpecialCodes SnesAssembler::ResolveOpMode(AssemblerLineData& op, uint32
 	} else if(op.OperandCount == 2) {
 		if(operand2.Type == OperandType::X) {
 			switch(operand.ByteCount) {
-				case 1: op.AddrMode = SnesAddrMode::DirIdxX; break;
+				case 1: AdjustOperandSize(op, operand, SnesAddrMode::DirIdxX, SnesAddrMode::AbsIdxX); break;
 				case 2: op.AddrMode = SnesAddrMode::AbsIdxX; break;
 				case 3: op.AddrMode = SnesAddrMode::AbsLngIdxX; break;
 				default: return AssemblerSpecialCodes::ParsingError;
 			}
 		} else if(operand2.Type == OperandType::Y) {
 			switch(operand.ByteCount) {
-				case 1: op.AddrMode = SnesAddrMode::DirIdxY; break;
+				case 1: AdjustOperandSize(op, operand, SnesAddrMode::DirIdxY, SnesAddrMode::AbsIdxY); break;
 				case 2: op.AddrMode = SnesAddrMode::AbsIdxY; break;
 				default: return AssemblerSpecialCodes::ParsingError;
 			}
@@ -145,7 +162,8 @@ AssemblerSpecialCodes SnesAssembler::ResolveOpMode(AssemblerLineData& op, uint32
 		} else if(operand.ByteCount == 2) {
 			op.AddrMode = SnesAddrMode::Abs;
 		} else if(operand.ByteCount == 1) {
-			op.AddrMode = SnesAddrMode::Dir;
+			//Sometimes direct addressing is not available, even if the operand is in the direct page
+			AdjustOperandSize(op, operand, SnesAddrMode::Dir, SnesAddrMode::Abs);
 		} else {
 			return AssemblerSpecialCodes::ParsingError;
 		}

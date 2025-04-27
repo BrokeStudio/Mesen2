@@ -51,7 +51,7 @@ namespace Mesen.Config
 			} else {
 				homeFolder = DefaultDocumentsFolder;
 			}
-			Program.ExtractNativeDependencies(homeFolder);
+			DependencyHelper.ExtractNativeDependencies(homeFolder);
 			_homeFolder = homeFolder;
 			Config.Save();
 		}
@@ -255,13 +255,19 @@ namespace Mesen.Config
 			}
 		}
 
-		public static void ResetSettings()
+		public static void ResetSettings(bool initDefaults = true)
 		{
 			DefaultKeyMappingType defaultMappings = Config.DefaultKeyMappings;
+			if(defaultMappings == DefaultKeyMappingType.None) {
+				defaultMappings = DefaultKeyMappingType.Xbox | DefaultKeyMappingType.ArrowKeys;
+			}
+
 			_config = Configuration.CreateConfig();
 			Config.DefaultKeyMappings = defaultMappings;
-			Config.InitializeDefaults();
-			Config.ConfigUpgrade = (int)ConfigUpgradeHint.NextValue - 1;
+			if(initDefaults) {
+				Config.InitializeDefaults();
+				Config.ConfigUpgrade = (int)ConfigUpgradeHint.NextValue - 1;
+			}
 			Config.Save();
 			Config.ApplyConfig();
 		}

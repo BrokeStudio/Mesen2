@@ -44,16 +44,18 @@ class GbDebugger final : public IDebugger
 	unique_ptr<DummyGbCpu> _dummyCpu;
 
 	uint8_t _prevOpCode = 0xFF;
+	uint16_t _prevStackPointer = 0;
 	uint32_t _prevProgramCounter = 0;
 
 	string _cdlFile;
 
-	__forceinline void ProcessCallStackUpdates(AddressInfo& destAddr, uint16_t destPc);
+	__forceinline void ProcessCallStackUpdates(AddressInfo& destAddr, uint16_t destPc, uint16_t sp);
 
 public:
 	GbDebugger(Debugger* debugger);
 	~GbDebugger();
 
+	void OnBeforeBreak() override;
 	void Reset() override;
 
 	void ProcessInstruction();

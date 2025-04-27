@@ -220,7 +220,7 @@ namespace Mesen.Interop
 		[DllImport(DllPath)] public static extern AddressInfo GetAbsoluteAddress(AddressInfo relAddress);
 		[DllImport(DllPath)] public static extern AddressInfo GetRelativeAddress(AddressInfo absAddress, CpuType cpuType);
 
-		[DllImport(DllPath)] public static extern void SetLabel(uint address, MemoryType memType, string label, string comment);
+		[DllImport(DllPath)] public static extern void SetLabel(uint address, MemoryType memType, [MarshalAs(UnmanagedType.LPUTF8Str)] string label, [MarshalAs(UnmanagedType.LPUTF8Str)] string comment);
 		[DllImport(DllPath)] public static extern void ClearLabels();
 
 		[DllImport(DllPath)] public static extern void SetBreakpoints([MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 1)] InteropBreakpoint[] breakpoints, UInt32 length);
@@ -549,6 +549,7 @@ namespace Mesen.Interop
 				CpuType.Sa1 => state is SnesCpuState,
 				CpuType.Gsu => state is GsuState,
 				CpuType.Cx4 => state is Cx4State,
+				CpuType.St018 => state is ArmV3CpuState,
 				CpuType.Gameboy => state is GbCpuState,
 				CpuType.Nes => state is NesCpuState,
 				CpuType.Pce => state is PceCpuState,
@@ -590,6 +591,7 @@ namespace Mesen.Interop
 		NecDspMemory,
 		GsuMemory,
 		Cx4Memory,
+		St018Memory,
 		GameboyMemory,
 		NesMemory,
 		NesPpuMemory,
@@ -616,6 +618,12 @@ namespace Mesen.Interop
 		Cx4DataRam,
 		BsxPsRam,
 		BsxMemoryPack,
+		St018PrgRom,
+		St018DataRom,
+		St018WorkRam,
+		SufamiTurboFirmware,
+		SufamiTurboSecondCart,
+		SufamiTurboSecondCartRam,
 
 		GbPrgRom,
 		GbWorkRam,
@@ -1232,7 +1240,7 @@ namespace Mesen.Interop
 		[MarshalAs(UnmanagedType.I1)] public bool WrapRightToLeft;
 	}
 
-	public enum DebugSpritePriority
+	public enum DebugSpritePriority : sbyte
 	{
 		Undefined = -1,
 		Number0 = 0,
@@ -1241,6 +1249,15 @@ namespace Mesen.Interop
 		Number3 = 3,
 		Foreground = 4,
 		Background = 5
+	}
+
+	public enum DebugSpriteMode : sbyte
+	{
+		Undefined = -1,
+		Normal = 0,
+		Blending,
+		Window,
+		Stereoscopic
 	}
 
 	public unsafe struct DebugSpriteInfo
@@ -1260,13 +1277,12 @@ namespace Mesen.Interop
 		public Int16 Bpp;
 		public Int16 Palette;
 		public DebugSpritePriority Priority;
+		public DebugSpriteMode Mode;
 		public UInt16 Width;
 		public UInt16 Height;
 		public NullableBoolean HorizontalMirror;
 		public NullableBoolean VerticalMirror;
 		public NullableBoolean MosaicEnabled;
-		public NullableBoolean BlendingEnabled;
-		public NullableBoolean WindowMode;
 		public NullableBoolean TransformEnabled;
 		public NullableBoolean DoubleSize;
 		public sbyte TransformParamIndex;
@@ -1393,6 +1409,13 @@ namespace Mesen.Interop
 				_ => throw new Exception("TileFormat not supported"),
 			};
 		}
+
+		public static int GetBytesPerTile(this TileFormat format)
+		{
+			int bitsPerPixel = format.GetBitsPerPixel();
+			PixelSize tileSize = format.GetTileSize();
+			return tileSize.Width * tileSize.Height * bitsPerPixel / 8;
+		}
 	}
 
 	public enum TileLayout
@@ -1473,6 +1496,7 @@ namespace Mesen.Interop
 		public UInt32 Target;
 		public AddressInfo AbsTarget;
 		public UInt32 Return;
+		public UInt32 ReturnStackPointer;
 		public AddressInfo AbsReturn;
 		public StackFrameFlags Flags;
 	};
@@ -1492,6 +1516,7 @@ namespace Mesen.Interop
 		Sa1,
 		Gsu,
 		Cx4,
+		St018,
 		Gameboy,
 		Nes,
 		Pce,
@@ -1522,16 +1547,16 @@ namespace Mesen.Interop
 		Pause,
 		CpuStep,
 		PpuStep,
+		Irq,
+		Nmi,
 		InternalOperation,
 
 		BreakOnBrk,
 		BreakOnCop,
 		BreakOnWdm,
 		BreakOnStp,
-		BreakOnUninitMemoryRead,
 
-		Irq,
-		Nmi,
+		BreakOnUninitMemoryRead,
 
 		GbInvalidOamAccess,
 		GbInvalidVramAccess,
@@ -1541,12 +1566,15 @@ namespace Mesen.Interop
 		GbOamCorruption,
 
 		NesBreakOnDecayedOamRead,
-		NesBreakOnPpu2000ScrollGlitch,
-		NesBreakOnPpu2006ScrollGlitch,
+		NesBreakOnPpuScrollGlitch,
 		BreakOnUnofficialOpCode,
+		BreakOnUnstableOpCode,
 		NesBusConflict,
 		NesBreakOnCpuCrash,
 		NesBreakOnExtOutputMode,
+		NesInvalidVramAccess,
+		NesInvalidOamWrite,
+		NesDmaInputRead,
 
 		PceBreakOnInvalidVramAddress,
 
@@ -1555,7 +1583,10 @@ namespace Mesen.Interop
 		GbaInvalidOpCode,
 		GbaNopLoad,
 		GbaUnalignedMemoryAccess,
-		
+
+		SnesInvalidPpuAccess,
+		SnesReadDuringAutoJoy,
+
 		BreakOnUndefinedOpCode
 	}
 
@@ -1611,6 +1642,7 @@ namespace Mesen.Interop
 		public UInt64 MinCycles;
 		public UInt64 MaxCycles;
 		public AddressInfo Address;
+		public StackFrameFlags Flags;
 
 		public UInt64 GetAvgCycles()
 		{

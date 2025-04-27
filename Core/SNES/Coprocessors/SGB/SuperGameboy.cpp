@@ -46,8 +46,11 @@ SuperGameboy::~SuperGameboy()
 
 void SuperGameboy::Reset()
 {
-	_control = 0;
+	_control = 0x01;
+	_effectiveClockRate = 0;
+	_clockOffset = 0;
 	_resetClock = 0;
+	UpdateClockRatio();
 
 	memset(_input, 0, sizeof(_input));
 	_inputIndex = 0;
@@ -93,7 +96,7 @@ uint8_t SuperGameboy::Read(uint32_t addr)
 		return data;
 	} else {
 		switch(addr & 0xFFFF) {
-			case 0x6000: return (GetLcdRow() << 3) | GetLcdBufferRow();
+			case 0x6000: return (_row & ~0x07) | _bank;
 			case 0x6002: return _packetReady;
 			case 0x600F: return 0x21; //or 0x61
 		}
@@ -143,6 +146,7 @@ void SuperGameboy::ProcessInputPortWrite(uint8_t value)
 		_waitForHigh = true;
 		_packetByte = 0;
 		_packetBit = 0;
+		_packetBuffer = 0;
 	} else if(_waitForHigh) {
 		if(value == 0x10 || value == 0x20) {
 			//Invalid sequence (should be 0x00 -> 0x30 -> 0x10/0x20 -> 0x30 -> 0x10/0x20, etc.)
@@ -163,11 +167,13 @@ void SuperGameboy::ProcessInputPortWrite(uint8_t value)
 					LogPacket();
 				}
 			} else {
-				_packetData[_packetByte] &= ~(1 << _packetBit);
+				_packetBuffer &= ~(1 << _packetBit);
 			}
 			_packetBit++;
 			if(_packetBit == 8) {
 				_packetBit = 0;
+				_packetData[_packetByte] = _packetBuffer;
+				_packetBuffer = 0;
 				_packetByte++;
 			}
 		} else if(value == 0x10) {
@@ -176,10 +182,12 @@ void SuperGameboy::ProcessInputPortWrite(uint8_t value)
 				//Invalid bit
 				_listeningForPacket = false;
 			} else {
-				_packetData[_packetByte] |= (1 << _packetBit);
+				_packetBuffer |= (1 << _packetBit);
 				_packetBit++;
 				if(_packetBit == 8) {
 					_packetBit = 0;
+					_packetData[_packetByte] = _packetBuffer;
+					_packetBuffer = 0;
 					_packetByte++;
 				}
 			}
@@ -237,24 +245,22 @@ void SuperGameboy::LogPacket()
 	_emu->DebugLog(log);
 }
 
+void SuperGameboy::ProcessHBlank()
+{
+	_row++;
+	if((_row & 0x07) == 0) {
+		_bank = (_bank + 1) & 0x03;
+	}
+}
+
+void SuperGameboy::ProcessVBlank()
+{
+	_row = 0;
+}
+
 void SuperGameboy::WriteLcdColor(uint8_t scanline, uint8_t pixel, uint8_t color)
 {
-	_lcdBuffer[GetLcdBufferRow()][(scanline & 0x07) * 160 + pixel] = color;
-}
-
-uint8_t SuperGameboy::GetLcdRow()
-{
-	uint8_t scanline = _ppu->GetScanline();
-	uint8_t row = scanline / 8;
-	if(row >= 18) {
-		row = 0;
-	}
-	return row;
-}
-
-uint8_t SuperGameboy::GetLcdBufferRow()
-{
-	return (_ppu->GetFrameCount() * 18 + GetLcdRow()) & 0x03;
+	_lcdBuffer[_bank][(_row & 0x07) * 160 + pixel] = color;
 }
 
 uint8_t SuperGameboy::GetPlayerCount()
@@ -360,7 +366,9 @@ AddressInfo SuperGameboy::GetAbsoluteAddress(uint32_t address)
 void SuperGameboy::Serialize(Serializer& s)
 {
 	SV(_control); SV(_resetClock); SV(_input[0]); SV(_input[1]); SV(_input[2]); SV(_input[3]); SV(_inputIndex); SV(_listeningForPacket); SV(_packetReady);
-	SV(_inputWriteClock); SV(_inputValue); SV(_packetByte); SV(_packetBit); SV(_lcdRowSelect); SV(_readPosition); SV(_waitForHigh); SV(_clockRatio);
+	SV(_inputWriteClock); SV(_inputValue); SV(_packetByte); SV(_packetBuffer); SV(_packetBit); SV(_lcdRowSelect); SV(_readPosition); SV(_waitForHigh); SV(_clockRatio);
+	SV(_row);
+	SV(_bank);
 
 	SVArray(_packetData, 16);
 	SVArray(_lcdBuffer[0], 1280);

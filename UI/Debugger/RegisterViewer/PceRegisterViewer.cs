@@ -214,8 +214,8 @@ public class PceRegisterViewer
 			new RegEntry("$800.0-2", "Channel Select", pceState.Psg.ChannelSelect, Format.X8),
 			new RegEntry("$801.0-3", "Right Amplitude", pceState.Psg.RightVolume, Format.X8),
 			new RegEntry("$801.4-7", "Left Amplitude", pceState.Psg.LeftVolume, Format.X8),
-			new RegEntry("$807.4-7", "LFO Frequency", pceState.Psg.LfoFrequency, Format.X8),
-			new RegEntry("$808", "LFO Control", pceState.Psg.LfoControl, Format.X8),
+			new RegEntry("$808.4-7", "LFO Frequency", pceState.Psg.LfoFrequency, Format.X8),
+			new RegEntry("$809", "LFO Control", pceState.Psg.LfoControl, Format.X8),
 		};
 
 		for(int i = 0; i < 6; i++) {
@@ -229,12 +229,13 @@ public class PceRegisterViewer
 				new RegEntry("$804.7", "Channel Enabled", ch.Enabled),
 				new RegEntry("$805.0-3", "Right Amplitude", ch.RightVolume, Format.X8),
 				new RegEntry("$805.4-7", "Left Amplitude", ch.LeftVolume, Format.X8),
+				new RegEntry("$806.0-4", "DDA Output Value", ch.DdaOutputValue, Format.X8),
 				new RegEntry("", "Timer", ch.Timer),
 			});
 
 			if(i >= 4) {
-				entries.Add(new RegEntry("$806.7", "Noise Enabled", ch.NoiseEnabled));
-				entries.Add(new RegEntry("$806.0-4", "Noise Frequency", ch.NoiseFrequency, Format.X8));
+				entries.Add(new RegEntry("$807.7", "Noise Enabled", ch.NoiseEnabled));
+				entries.Add(new RegEntry("$807.0-4", "Noise Frequency", ch.NoiseFrequency, Format.X8));
 				entries.Add(new RegEntry("", "Noise Timer", ch.NoiseTimer));
 				entries.Add(new RegEntry("", "Noise Output", ch.NoiseOutput == 0x0F ? 1 : 0));
 				entries.Add(new RegEntry("", "Noise LSFR", ch.NoiseLfsr, Format.X24));
@@ -264,11 +265,16 @@ public class PceRegisterViewer
 			new RegEntry("$180B.1", "DMA Enabled", (adpcm.DmaControl & 0x02) != 0),
 			new RegEntry("$180C.0", "End Reached", adpcm.EndReached),
 			new RegEntry("$180C.2", "Write Pending", adpcm.WriteClockCounter > 0),
-			new RegEntry("$180C.3", "ADPCM Playing", adpcm.Playing),
+			new RegEntry("$180C.3", "ADPCM Playing/Busy", adpcm.Playing),
 			new RegEntry("$180C.7", "Read Pending", adpcm.ReadClockCounter > 0),
 			new RegEntry("$180D", "Control", adpcm.Control),
+			/*new RegEntry("$180D.0", "Clock Write Address (?)", (adpcm.Control & 0x01) != 0),
+			new RegEntry("$180D.1", "Latch Write Address", (adpcm.Control & 0x02) != 0),
+			new RegEntry("$180D.2", "Clock Read Address (?)", (adpcm.Control & 0x04) != 0),
+			new RegEntry("$180D.3", "Latch Read Address", (adpcm.Control & 0x08) != 0),*/
 			new RegEntry("$180D.4", "Latch Length", (adpcm.Control & 0x10) != 0),
-			new RegEntry("$180D.5", "Play", (adpcm.Control & 0x20) != 0),
+			new RegEntry("$180D.5", "Start Playback", (adpcm.Control & 0x20) != 0),
+			new RegEntry("$180D.6", "Auto-stop on length = 0", (adpcm.Control & 0x40) != 0),
 			new RegEntry("$180D.7", "Reset", (adpcm.Control & 0x80) != 0),
 			new RegEntry("$180E", "Value", adpcm.PlaybackRate),
 			new RegEntry("$180E.0-3", "Playback Rate", Math.Round(32000.0 / (16 - adpcm.PlaybackRate)) + " Hz", (adpcm.PlaybackRate & 0xF)),
@@ -280,14 +286,14 @@ public class PceRegisterViewer
 			new RegEntry("$1802", "Enabled IRQs", cdrom.EnabledIrqs),
 			new RegEntry("$1802.2", "ADPCM - Half Reached IRQ Enabled", (cdrom.EnabledIrqs & (int)PceCdRomIrqSource.Adpcm) != 0),
 			new RegEntry("$1802.3", "ADPCM - End Reached IRQ Enabled", (cdrom.EnabledIrqs & (int)PceCdRomIrqSource.Stop) != 0),
-			new RegEntry("$1802.5", "Transfer Done IRQ Enabled", (cdrom.EnabledIrqs & (int)PceCdRomIrqSource.DataTransferDone) != 0),
-			new RegEntry("$1802.6", "Transfer Ready IRQ Enabled", (cdrom.EnabledIrqs & (int)PceCdRomIrqSource.DataTransferReady) != 0),
+			new RegEntry("$1802.5", "Status/Message In IRQ Enabled", (cdrom.EnabledIrqs & (int)PceCdRomIrqSource.StatusMsgIn) != 0),
+			new RegEntry("$1802.6", "Data In IRQ Enabled", (cdrom.EnabledIrqs & (int)PceCdRomIrqSource.DataIn) != 0),
 
 			new RegEntry("", "Active IRQs"),
 			new RegEntry("", "ADPCM - Half Reached IRQ", (cdrom.ActiveIrqs & (int)PceCdRomIrqSource.Adpcm) != 0),
 			new RegEntry("", "ADPCM - End Reached IRQ", (cdrom.ActiveIrqs & (int)PceCdRomIrqSource.Stop) != 0),
-			new RegEntry("", "Transfer Done IRQ", (cdrom.ActiveIrqs & (int)PceCdRomIrqSource.DataTransferDone) != 0),
-			new RegEntry("", "Transfer Ready IRQ", (cdrom.ActiveIrqs & (int)PceCdRomIrqSource.DataTransferReady) != 0),
+			new RegEntry("", "Status/Message In IRQ", (cdrom.ActiveIrqs & (int)PceCdRomIrqSource.StatusMsgIn) != 0),
+			new RegEntry("", "Data In IRQ", (cdrom.ActiveIrqs & (int)PceCdRomIrqSource.DataIn) != 0),
 
 			new RegEntry("", "SCSI Drive"),
 			new RegEntry("", "Current Sector", scsi.Sector),

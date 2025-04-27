@@ -142,6 +142,7 @@ public struct GbCpuState : BaseState
 	[MarshalAs(UnmanagedType.I1)] public bool EiPending;
 	[MarshalAs(UnmanagedType.I1)] public bool IME;
 	[MarshalAs(UnmanagedType.I1)] public bool HaltBug;
+	[MarshalAs(UnmanagedType.I1)] public bool Stopped;
 }
 
 public enum PpuMode
@@ -232,6 +233,7 @@ public struct GbSquareState
 	[MarshalAs(UnmanagedType.I1)] public bool LengthEnabled;
 
 	[MarshalAs(UnmanagedType.I1)] public bool Enabled;
+	[MarshalAs(UnmanagedType.I1)] public bool FirstStep;
 	public byte DutyPos;
 	public byte Output;
 }

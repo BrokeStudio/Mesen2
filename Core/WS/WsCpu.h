@@ -70,6 +70,9 @@ private:
 	ModRmState _modRm = {};
 	PrefixState _prefix = {};
 
+	uint64_t _suppressIrqClock = 0;
+	uint64_t _suppressTrapClock = 0;
+
 #ifndef DUMMYCPU
 	WsCpuPrefetch _prefetch;
 #endif
@@ -117,6 +120,7 @@ private:
 	void PopSegment(uint16_t& dst);
 	void PushFlags();
 	void PopFlags();
+	void SetFlags(uint16_t flags);
 	void PopMemory();
 	void PopAll();
 	void PushAll();
@@ -253,7 +257,10 @@ private:
 	void Wait();
 	void Halt();
 
+	void SuppressIrq(bool suppressTrap);
+
 	void SetFlagValue(bool& flag, bool value);
+	void SetIrqFlag();
 
 public:
 	WsCpu(Emulator* emu, WsMemoryManager* memoryManager);

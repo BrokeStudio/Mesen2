@@ -75,6 +75,16 @@ void GbaPpu::ProcessHBlank()
 		_console->GetDmaController()->TriggerDma(GbaDmaTrigger::HBlank);
 	}
 
+	for(int i = 0; i < 4; i++) {
+		if(_state.BgLayers[i].EnableTimer && --_state.BgLayers[i].EnableTimer == 0) {
+			//Exact timing hasn't been verified
+			//The mGBA Suite test writes on H=1065 and expects the layer to be enabled 3 scanlines later (write on scanline 101, starts rendering on scanline 104, so just over 2 scanlines)
+			//Spyro - Season of Ice writes on H=30, and expects the layer to be enabled 2 scanlines later
+			//Doing this at the start of hblank allows both scenarios the work
+			_state.BgLayers[i].Enabled = true;
+		}
+	}
+
 	if(_state.HblankIrqEnabled) {
 		_console->GetMemoryManager()->SetDelayedIrqSource(GbaIrqSource::LcdHblank, 4);
 	}
@@ -115,10 +125,6 @@ void GbaPpu::ProcessEndOfScanline()
 	}
 
 	for(int i = 0; i < 4; i++) {
-		if(_state.BgLayers[i].EnableTimer && --_state.BgLayers[i].EnableTimer == 0) {
-			_state.BgLayers[i].Enabled = true;
-		}
-
 		//Unverified: Latch X scroll value at the start of each scanline
 		//This fixes display issues in the Fire Emblem Sacred Stones menu
 		_state.BgLayers[i].ScrollXLatch = _state.BgLayers[i].ScrollX;
@@ -133,6 +139,7 @@ void GbaPpu::ProcessEndOfScanline()
 
 	if(_state.Scanline == 160) {
 		_oamScanline = 0;
+		_state.ObjEnableTimer = 0;
 		SendFrame();
 		if(_state.VblankIrqEnabled) {
 			_console->GetMemoryManager()->SetIrqSource(GbaIrqSource::LcdVblank);
@@ -346,7 +353,7 @@ void GbaPpu::ProcessColorMath()
 		}
 	}
 
-	if(_state.GreenSwapEnabled) {
+	if(_state.StereoscopicEnabled) {
 		for(int x = start & ~1; x + 1 <= end; x+=2) {
 			uint16_t gLeft = dst[x] & 0x3E0;
 			uint16_t gRight = dst[x+1] & 0x3E0;
@@ -1039,7 +1046,7 @@ void GbaPpu::RenderSprites()
 			spr.DoubleSize = sprData & 0x0200;
 			spr.HideSprite = !spr.TransformEnabled && spr.DoubleSize;
 			spr.Mode = (GbaPpuObjMode)((sprData >> 10) & 0x03);
-			if(!spr.HideSprite && spr.Mode != GbaPpuObjMode::Invalid) {
+			if(!spr.HideSprite) {
 				spr.SpriteY = sprData & 0xFF;
 				spr.Shape = (sprData >> 14) & 0x03;
 				spr.Size = (sprData >> 30) & 0x03;
@@ -1174,15 +1181,15 @@ void GbaPpu::SetLayerEnabled(int layer, bool enabled)
 		_state.BgLayers[layer].Enabled = enabled;
 		_state.BgLayers[layer].EnableTimer = 0;
 	} else if(_state.BgLayers[layer].EnableTimer == 0) {
-		_state.BgLayers[layer].EnableTimer = 3;
+		_state.BgLayers[layer].EnableTimer = 2;
 	}
 }
 
 void GbaPpu::WriteRegister(uint32_t addr, uint8_t value)
 {
 	if(_lastRenderCycle != _state.Cycle && (_state.Scanline < 160 || _state.Scanline == 227)) {
-		if(_state.Cycle < 1006 || addr <= 0x01 || addr == 0x4D) {
-			//Only run renderer during active rendering (< 1006), or if the write could affect sprites
+		if(_state.Cycle < 1006 || addr <= 0x01 || addr == 0x4D || addr >= 0x40 && addr <= 0x43) {
+			//Only run renderer during active rendering (< 1006), or if the write could affect sprites/window processing
 			RenderScanline(true);
 		}
 	}
@@ -1210,7 +1217,7 @@ void GbaPpu::WriteRegister(uint32_t addr, uint8_t value)
 				std::fill(_oamOutputBuffers[0], _oamOutputBuffers[0] + 240, GbaPixelData {});
 				std::fill(_oamOutputBuffers[1], _oamOutputBuffers[1] + 240, GbaPixelData {});
 			} else if(!_state.ObjLayerEnabled && objEnabled) {
-				_state.ObjEnableTimer = 3;
+				_state.ObjEnableTimer = _state.Scanline >= 160 ? 0 : 3;
 			}
 			_state.ObjLayerEnabled = objEnabled;
 			_state.Window0Enabled = value & 0x20;
@@ -1219,7 +1226,7 @@ void GbaPpu::WriteRegister(uint32_t addr, uint8_t value)
 			break;
 		}
 
-		case 0x02: _state.GreenSwapEnabled = value & 0x01; break;
+		case 0x02: _state.StereoscopicEnabled = value & 0x01; break;
 		case 0x03: break;
 
 		case 0x04:
@@ -1246,7 +1253,7 @@ void GbaPpu::WriteRegister(uint32_t addr, uint8_t value)
 			BitUtilities::SetBits<0>(cfg.Control, value);
 			cfg.Priority = value & 0x03;
 			cfg.TilesetAddr = ((value >> 2) & 0x03) * 0x4000;
-			//Bits 4-5 unused
+			cfg.StereoMode = (GbaBgStereoMode)((value >> 4) & 0x03);
 			cfg.Mosaic = value & 0x40;
 			cfg.Bpp8Mode = value & 0x80;
 			break;
@@ -1367,13 +1374,13 @@ uint8_t GbaPpu::ReadRegister(uint32_t addr)
 		case 0x00: return _state.Control;
 		case 0x01: return _state.Control2;
 
-		case 0x02: return (uint8_t)_state.GreenSwapEnabled;
+		case 0x02: return (uint8_t)_state.StereoscopicEnabled;
 		case 0x03: return 0;
 
 		case 0x04:
 			return (
 				(_state.Scanline >= 160 && _state.Scanline != 227 ? 0x01 : 0) |
-				(_state.Cycle > 1007 ? 0x02 : 0) |
+				((_state.Cycle > 1007 || _state.Cycle == 0) ? 0x02 : 0) |
 				(_state.Scanline == _state.Lyc ? 0x04 : 0) |
 				_state.DispStat
 			);
@@ -1426,7 +1433,7 @@ void GbaPpu::Serialize(Serializer& s)
 	SV(_state.AllowHblankOamAccess);
 	SV(_state.ObjVramMappingOneDimension);
 	SV(_state.ForcedBlank);
-	SV(_state.GreenSwapEnabled);
+	SV(_state.StereoscopicEnabled);
 
 	SV(_state.Control2);
 	SV(_state.ObjEnableTimer);
@@ -1466,6 +1473,7 @@ void GbaPpu::Serialize(Serializer& s)
 		SVI(_state.BgLayers[i].Bpp8Mode);
 		SVI(_state.BgLayers[i].Enabled);
 		SVI(_state.BgLayers[i].EnableTimer);
+		SVI(_state.BgLayers[i].StereoMode);
 	}
 	
 	for(int i = 0; i < 2; i++) {

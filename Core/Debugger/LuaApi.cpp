@@ -6,6 +6,7 @@
 #include "Debugger/MemoryDumper.h"
 #include "Debugger/ScriptingContext.h"
 #include "Debugger/MemoryAccessCounter.h"
+#include "Debugger/CdlManager.h"
 #include "Debugger/LabelManager.h"
 #include "Shared/SystemActionManager.h"
 #include "Shared/Video/DebugHud.h"
@@ -140,6 +141,8 @@ int LuaApi::GetLibrary(lua_State *lua)
 
 		{ "getAccessCounters", LuaApi::GetAccessCounters },
 		{ "resetAccessCounters", LuaApi::ResetAccessCounters },
+
+		{ "getCdlData", LuaApi::GetCdlData},
 
 		{ "addCheat", LuaApi::AddCheat },
 		{ "clearCheats", LuaApi::ClearCheats },
@@ -696,7 +699,7 @@ int LuaApi::GetPixel(lua_State *lua)
 	errorCond(x < 0 || x >= (int)frameSize.Width || y < 0 || y >= (int)frameSize.Height, "invalid x,y coordinates");
 
 	uint32_t* rgbBuffer = filter->GetOutputBuffer();
-	l.Return(rgbBuffer[y * frameSize.Width + x]);
+	l.Return(rgbBuffer[y * frameSize.Width + x] & 0xFFFFFF);
 	return l.ReturnCount();
 }
 
@@ -949,6 +952,31 @@ int LuaApi::ResetAccessCounters(lua_State *lua)
 	return l.ReturnCount();
 }
 
+int LuaApi::GetCdlData(lua_State* lua)
+{
+	LuaCallHelper l(lua);
+	MemoryType memoryType = (MemoryType)l.ReadInteger();
+	checkEnum(MemoryType, memoryType, "Invalid memory type");
+	checkparams();
+
+	if(!_debugger->GetCdlManager()->GetCodeDataLogger(memoryType)) {
+		error("This memory type does not support CDL data (only some ROM memory types support it)");
+	}
+
+	uint32_t size = _memoryDumper->GetMemorySize(memoryType);
+	vector<uint8_t> cdlData;
+	cdlData.resize(size, {});
+	_debugger->GetCdlManager()->GetCdlData(0, size, memoryType, cdlData.data());
+
+	lua_newtable(lua);
+	for(uint32_t i = 0; i < size; i++) {
+		lua_pushinteger(lua, cdlData[i]);
+		lua_rawseti(lua, -2, i);
+	}
+
+	return 1;
+}
+
 int LuaApi::GetScriptDataFolder(lua_State *lua)
 {
 	LuaCallHelper l(lua);
@@ -1047,7 +1075,7 @@ int LuaApi::GetState(lua_State *lua)
 
 	Serializer s(0, true, SerializeFormat::Map);
 	s.Stream(*_emu->GetConsole().get(), "", -1);
-	
+
 	//Add some more Lua-specific values
 	uint32_t frameCount = _emu->GetFrameCount();
 	uint32_t masterClock = _emu->GetMasterClock();
@@ -1065,12 +1093,12 @@ int LuaApi::GetState(lua_State *lua)
 
 	lua_newtable(lua);
 	for(auto& kvp : values) {
-		lua_pushstring(lua, kvp.first.c_str());
+		lua_pushlstring(lua, kvp.first.c_str(), kvp.first.size());
 		switch(kvp.second.Format) {
 			case SerializeMapValueFormat::Integer: lua_pushinteger(lua, kvp.second.Value.Integer); break;
 			case SerializeMapValueFormat::Double: lua_pushnumber(lua, kvp.second.Value.Double); break;
 			case SerializeMapValueFormat::Bool: lua_pushboolean(lua, kvp.second.Value.Bool); break;
-			case SerializeMapValueFormat::String: lua_pushstring(lua, kvp.second.StringValue.c_str()); break;
+			case SerializeMapValueFormat::String: lua_pushlstring(lua, kvp.second.StringValue.c_str(), kvp.second.StringValue.size()); break;
 		}
 		lua_settable(lua, -3);
 	}
@@ -1079,7 +1107,6 @@ int LuaApi::GetState(lua_State *lua)
 
 int LuaApi::SetState(lua_State* lua)
 {
-	LuaCallHelper l(lua);
 	lua_settop(lua, 1);
 	luaL_checktype(lua, -1, LUA_TTABLE);
 
@@ -1118,17 +1145,5 @@ int LuaApi::SetState(lua_State* lua)
 	s.LoadFromMap(map);
 
 	s.Stream(*_emu->GetConsole().get(), "", -1);
-	unordered_map<string, SerializeMapValue>& values = s.GetMapValues();
-
-	lua_newtable(lua);
-	for(auto& kvp : values) {
-		lua_pushstring(lua, kvp.first.c_str());
-		switch(kvp.second.Format) {
-			case SerializeMapValueFormat::Integer: lua_pushinteger(lua, kvp.second.Value.Integer); break;
-			case SerializeMapValueFormat::Double: lua_pushnumber(lua, kvp.second.Value.Double); break;
-			case SerializeMapValueFormat::Bool: lua_pushboolean(lua, kvp.second.Value.Bool); break;
-		}
-		lua_settable(lua, -3);
-	}
-	return 1;
+	return 0;
 }

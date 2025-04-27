@@ -75,7 +75,7 @@ public struct SmsVdpState : BaseState
 	public byte CodeReg;
 	[MarshalAs(UnmanagedType.I1)] public bool ControlPortMsbToggle;
 
-	public byte ReadBuffer;
+	public byte VramBuffer;
 	public byte PaletteLatch;
 	public byte HCounterLatch;
 
@@ -170,6 +170,10 @@ public struct SmsMemoryManagerState
 	public byte[] IsWriteRegister;
 
 	public byte OpenBus;
+	public byte GgExtData;
+	public byte GgExtConfig;
+	public byte GgSendData;
+	public byte GgSerialConfig;
 
 	[MarshalAs(UnmanagedType.I1)] public bool ExpEnabled;
 	[MarshalAs(UnmanagedType.I1)] public bool CartridgeEnabled;

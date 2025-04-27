@@ -195,7 +195,6 @@ namespace Mesen.Debugger.Controls
 
 		public PictureViewer()
 		{
-			Focusable = true;
 			VerticalAlignment = VerticalAlignment.Top;
 			HorizontalAlignment = HorizontalAlignment.Left;
 			ClipToBounds = true;
@@ -205,6 +204,14 @@ namespace Mesen.Debugger.Controls
 		private void OnSourceInvalidated(object? sender, EventArgs e)
 		{
 			InvalidateVisual();
+		}
+
+		protected override void OnUnloaded(RoutedEventArgs e)
+		{
+			if(Source is IDynamicBitmap src) {
+				src.Invalidated -= OnSourceInvalidated;
+			}
+			base.OnUnloaded(e);
 		}
 
 		protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -278,15 +285,13 @@ namespace Mesen.Debugger.Controls
 				MinHeight = 0;
 			} else {
 				double dpiScale = LayoutHelper.GetLayoutScale(this);
-				MinWidth = (int)(Source.Size.Width - LeftClipSize - RightClipSize) * Zoom / dpiScale;
-				MinHeight = (int)(Source.Size.Height - TopClipSize - BottomClipSize) * Zoom / dpiScale;
+				MinWidth = Math.Max(0, (int)(Source.Size.Width - LeftClipSize - RightClipSize) * Zoom / dpiScale);
+				MinHeight = Math.Max(0, (int)(Source.Size.Height - TopClipSize - BottomClipSize) * Zoom / dpiScale);
 			}
 		}
 
-		protected override void OnKeyDown(KeyEventArgs e)
+		public void ProcessKeyDown(KeyEventArgs e)
 		{
-			base.OnKeyDown(e);
-
 			if(!AllowSelection) {
 				return;
 			}

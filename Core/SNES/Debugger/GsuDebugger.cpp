@@ -66,6 +66,11 @@ void GsuDebugger::ProcessInstruction()
 
 	_memoryAccessCounter->ProcessMemoryExec(addressInfo, _memoryManager->GetMasterClock());
 	_debugger->ProcessBreakConditions(CpuType::Gsu, *_step.get(), _breakpointManager.get(), operation, addressInfo);
+
+	if(_traceLogger->IsEnabled()) {
+		DisassemblyInfo disInfo = _disassembler->GetDisassemblyInfo(addressInfo, addr, 0, CpuType::Gsu);
+		_traceLogger->Log(_gsu->GetState(), disInfo, operation, addressInfo);
+	}
 }
 
 void GsuDebugger::ProcessRead(uint32_t addr, uint8_t value, MemoryOperationType type)
@@ -75,10 +80,6 @@ void GsuDebugger::ProcessRead(uint32_t addr, uint8_t value, MemoryOperationType 
 	InstructionProgress.LastMemOperation = operation;
 
 	if(type == MemoryOperationType::ExecOpCode) {
-		if(_traceLogger->IsEnabled()) {
-			DisassemblyInfo disInfo = _disassembler->GetDisassemblyInfo(addressInfo, addr, 0, CpuType::Gsu);
-			_traceLogger->Log(_gsu->GetState(), disInfo, operation, addressInfo);
-		}
 		_memoryAccessCounter->ProcessMemoryExec(addressInfo, _memoryManager->GetMasterClock());
 	} else if(type == MemoryOperationType::ExecOperand) {
 		if(addressInfo.Type == MemoryType::SnesPrgRom) {
@@ -160,7 +161,7 @@ uint64_t GsuDebugger::GetCpuCycleCount(bool forProfiler)
 DebuggerFeatures GsuDebugger::GetSupportedFeatures()
 {
 	DebuggerFeatures features = {};
-	features.ChangeProgramCounter = true;
+	features.ChangeProgramCounter = AllowChangeProgramCounter;
 	return features;
 }
 
@@ -181,7 +182,7 @@ IAssembler* GsuDebugger::GetAssembler()
 
 BaseEventManager* GsuDebugger::GetEventManager()
 {
-	throw std::runtime_error("Event manager not supported for GSU");
+	return nullptr;
 }
 
 BaseState& GsuDebugger::GetState()

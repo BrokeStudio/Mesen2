@@ -48,11 +48,6 @@ namespace Mesen.Interop
 		[DllImport(DllPath)] public static extern void Stop();
 		[DllImport(DllPath)] public static extern Int32 GetStopCode();
 
-		public static void Reset() { Task.Run(() => EmuApi.ExecuteShortcut(new ExecuteShortcutParams() { Shortcut = EmulatorShortcut.ExecReset })); }
-		public static void PowerCycle() { Task.Run(() => EmuApi.ExecuteShortcut(new ExecuteShortcutParams() { Shortcut = EmulatorShortcut.ExecPowerCycle })); }
-		public static void PowerOff() { Task.Run(() => EmuApi.ExecuteShortcut(new ExecuteShortcutParams() { Shortcut = EmulatorShortcut.ExecPowerOff })); }
-		public static void ReloadRom() { Task.Run(() => EmuApi.ExecuteShortcut(new ExecuteShortcutParams() { Shortcut = EmulatorShortcut.ExecReloadRom })); }
-
 		[DllImport(DllPath)] public static extern void Pause();
 		[DllImport(DllPath)] public static extern void Resume();
 		[DllImport(DllPath)] [return: MarshalAs(UnmanagedType.I1)] public static extern bool IsPaused();
@@ -248,7 +243,6 @@ namespace Mesen.Interop
 
 	public enum FirmwareType
 	{
-		CX4,
 		DSP1,
 		DSP1B,
 		DSP2,
@@ -258,6 +252,7 @@ namespace Mesen.Interop
 		ST011,
 		ST018,
 		Satellaview,
+		SufamiTurbo,
 		Gameboy,
 		GameboyColor,
 		GameboyAdvance,
@@ -273,7 +268,9 @@ namespace Mesen.Interop
 		WonderSwan,
 		WonderSwanColor,
 		SwanCrystal,
-		Ymf288AdpcmRom
+		Ymf288AdpcmRom,
+		SmsBootRom,
+		GgBootRom
 	}
 
 	public struct MissingFirmwareMessage
@@ -282,21 +279,12 @@ namespace Mesen.Interop
 		public FirmwareType Firmware;
 		public UInt32 Size;
 		public UInt32 AltSize;
+	}
 
-		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 5)]
-		public IntPtr[] FileHashes;
-
-		public List<string> GetFileHashes()
-		{
-			List<string> hashes = new List<string>();
-			for(int i = 0; i < FileHashes.Length; i++) {
-				string hash = Marshal.PtrToStringUTF8(FileHashes[i]) ?? "";
-				if(hash.Length > 0) {
-					hashes.Add(hash);
-				}
-			}
-			return hashes;
-		}
+	public struct SufamiTurboFilePromptMessage
+	{
+		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 5000)]
+		public byte[] Filename;
 	}
 
 	public struct ExecuteShortcutParams

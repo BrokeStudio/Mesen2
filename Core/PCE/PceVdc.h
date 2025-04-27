@@ -80,6 +80,7 @@ private:
 
 	uint16_t _screenOffsetX = 0;
 	bool _needRcrIncrement = false;
+	bool _needVCounterClock = false;
 	bool _needVertBlankIrq = false;
 	bool _verticalBlankDone = false;
 
@@ -111,6 +112,7 @@ private:
 	PceVdcEvent _nextEvent = PceVdcEvent::None;
 	uint16_t _nextEventCounter = 0;
 	uint64_t _hSyncStartClock = 0;
+	bool _allowDma = true;
 
 	bool _isVdc2 = false;
 	MemoryType _vramType = MemoryType::PceVideoRam;
@@ -151,11 +153,14 @@ private:
 	__noinline void IncrementRcrCounter();
 	__noinline void IncScrollY();
 	__noinline void ProcessEndOfScanline();
-	__noinline void ProcessEndOfVisibleFrame();
+	
+	void TriggerDmaStart();
+	__noinline void TriggerVerticalBlank();
 	__noinline void ProcessSatbTransfer();
 	__noinline void ProcessVramDmaTransfer();
 	__noinline void SetVertMode(PceVdcModeV vMode);
 	__noinline void SetHorizontalMode(PceVdcModeH hMode);
+	void ClockVCounter();
 
 	__noinline void ProcessVdcEvents();
 	__noinline void ProcessEvent();
@@ -168,6 +173,8 @@ private:
 
 	__forceinline void ProcessSpriteEvaluation();
 	__noinline void LoadSpriteTiles();
+
+	bool IsDmaAllowed();
 	
 	template<bool skipRender>
 	__forceinline void LoadBackgroundTiles();

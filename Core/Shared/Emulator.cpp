@@ -21,7 +21,6 @@
 #include "Shared/BatteryManager.h"
 #include "Shared/CheatManager.h"
 #include "Shared/SystemActionManager.h"
-#include "Shared/Movies/MovieManager.h"
 #include "Shared/TimingInfo.h"
 #include "Shared/HistoryViewer.h"
 #include "Netplay/GameServer.h"
@@ -30,7 +29,6 @@
 #include "Shared/Interfaces/IBarcodeReader.h"
 #include "Shared/Interfaces/ITapeRecorder.h"
 #include "Shared/BaseControlManager.h"
-#include "Shared/SystemActionManager.h"
 #include "SNES/SnesConsole.h"
 #include "SNES/SnesDefaultVideoFilter.h"
 #include "NES/NesConsole.h"
@@ -238,7 +236,7 @@ void Emulator::OnBeforeSendFrame()
 {
 	if(!_isRunAheadFrame) {
 		if(_audioPlayerHud) {
-			_audioPlayerHud->Draw();
+			_audioPlayerHud->Draw(GetFrameCount(), GetFps());
 		}
 
 		if(_stats && _settings->GetPreferences().ShowDebugInfo) {
@@ -286,6 +284,11 @@ void Emulator::Stop(bool sendNotification, bool preventRecentGameSave, bool save
 		_emuThread.release();
 	}
 
+	if(_console && saveBattery) {
+		//Only save battery on power off, otherwise SaveBattery() is called by LoadRom()
+		_console->SaveBattery();
+	}
+
 	if(!preventRecentGameSave && _console && !_settings->GetPreferences().DisableGameSelectionScreen && !_audioPlayerHud) {
 		RomInfo romInfo = GetRomInfo();
 		_saveStateManager->SaveRecentGame(romInfo.RomFile.GetFileName(), romInfo.RomFile, romInfo.PatchFile);
@@ -300,10 +303,6 @@ void Emulator::Stop(bool sendNotification, bool preventRecentGameSave, bool save
 	_rewindManager->Reset();
 
 	if(_console) {
-		if(saveBattery) {
-			//Only save battery on power off, otherwise SaveBattery() is called by LoadRom()
-			_console->SaveBattery();
-		}
 		_console.reset();
 	}
 
@@ -326,6 +325,7 @@ void Emulator::Reset()
 	_systemActionManager->ResetState();
 
 	_console->GetControlManager()->UpdateInputState();
+	_console->GetControlManager()->ResetLagCounter();
 
 	_videoRenderer->ClearFrame();
 
@@ -347,6 +347,9 @@ void Emulator::ReloadRom(bool forPowerCycle)
 			//Power cycle failed (rom not longer exists, etc.), reset flag
 			//(otherwise power cycle will continue to be attempted on each frame)
 			_systemActionManager->ResetState();
+
+			//Unsuspend debugger, otherwise deadlocks can occur after a power cycle fails when the debugger is active
+			SuspendDebugger(true);
 		}
 	}
 }
@@ -358,16 +361,22 @@ void Emulator::PowerCycle()
 
 bool Emulator::LoadRom(VirtualFile romFile, VirtualFile patchFile, bool stopRom, bool forPowerCycle)
 {
+	bool result = false;
 	try {
-		return InternalLoadRom(romFile, patchFile, stopRom, forPowerCycle);
+		result = InternalLoadRom(romFile, patchFile, stopRom, forPowerCycle);
 	} catch(std::exception& ex) {
 		_videoDecoder->StartThread();
 		_videoRenderer->StartThread();
 
 		MessageManager::DisplayMessage("Error", "UnexpectedError", ex.what());
 		Stop(false, true, false);
-		return false;
 	}
+
+	if(!result) {
+		_notificationManager->SendNotification(ConsoleNotificationType::GameLoadFailed);
+	}
+
+	return result;
 }
 
 bool Emulator::InternalLoadRom(VirtualFile romFile, VirtualFile patchFile, bool stopRom, bool forPowerCycle)
@@ -411,6 +420,8 @@ bool Emulator::InternalLoadRom(VirtualFile romFile, VirtualFile patchFile, bool 
 		_console->SaveBattery();
 	}
 
+	_soundMixer->StopAudio();
+
 	if(!forPowerCycle) {
 		_movieManager->Stop();
 	}
@@ -427,7 +438,6 @@ bool Emulator::InternalLoadRom(VirtualFile romFile, VirtualFile patchFile, bool 
 	TryLoadRom(romFile, result, console, true);
 	
 	if(result != LoadRomResult::Success) {
-		_notificationManager->SendNotification(ConsoleNotificationType::GameLoadFailed);
 		MessageManager::DisplayMessage("Error", "CouldNotLoadFile", romFile.GetFileName());
 		if(debugger) {
 			_debugger.reset(debugger);
@@ -480,7 +490,7 @@ bool Emulator::InternalLoadRom(VirtualFile romFile, VirtualFile patchFile, bool 
 
 	_rewindManager->InitHistory();
 
-	if(debuggerActive) {
+	if(debuggerActive || _settings->CheckFlag(EmulationFlags::ConsoleMode)) {
 		InitDebugger();
 	}
 
@@ -972,6 +982,7 @@ void Emulator::InputBarcode(uint64_t barcode, uint32_t digitCount)
 	if(console) {
 		shared_ptr<IBarcodeReader> reader = console->GetControlManager()->GetControlDevice<IBarcodeReader>();
 		if(reader) {
+			auto lock = AcquireLock();
 			reader->InputBarcode(barcode, digitCount);
 		}
 	}
@@ -983,6 +994,7 @@ void Emulator::ProcessTapeRecorderAction(TapeRecorderAction action, string filen
 	if(console) {
 		shared_ptr<ITapeRecorder> recorder = console->GetControlManager()->GetControlDevice<ITapeRecorder>();
 		if(recorder) {
+			auto lock = AcquireLock();
 			recorder->ProcessTapeRecorderAction(action, filename);
 		}
 	}

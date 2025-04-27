@@ -2,6 +2,7 @@
 #include "pch.h"
 #include "Shared/MemoryType.h"
 #include "Shared/BaseState.h"
+#include "Shared/ArmEnums.h"
 #include "Utilities/Serializer.h"
 
 enum class GbaCpuMode : uint8_t
@@ -109,6 +110,14 @@ struct GbaCpuState : BaseState
 	uint64_t CycleCount;
 };
 
+enum class GbaBgStereoMode : uint8_t
+{
+	Disabled,
+	EvenColumns,
+	OddColumns,
+	Both
+};
+
 struct GbaBgConfig
 {
 	uint16_t Control;
@@ -126,6 +135,7 @@ struct GbaBgConfig
 	bool Bpp8Mode;
 	bool Enabled;
 	uint8_t EnableTimer;
+	GbaBgStereoMode StereoMode;
 };
 
 struct GbaTransformConfig
@@ -163,7 +173,7 @@ enum class GbaPpuObjMode : uint8_t
 	Normal,
 	Blending,
 	Window,
-	Invalid
+	Stereoscopic
 };
 
 namespace GbaPpuMemAccess
@@ -190,7 +200,7 @@ struct GbaPpuState : BaseState
 	bool AllowHblankOamAccess;
 	bool ObjVramMappingOneDimension;
 	bool ForcedBlank;
-	bool GreenSwapEnabled;
+	bool StereoscopicEnabled;
 
 	uint8_t Control2;
 	uint8_t ObjEnableTimer;
@@ -259,10 +269,14 @@ struct GbaMemoryManagerState
 
 struct GbaRomPrefetchState
 {
-	uint8_t ClockCounter;
 	uint32_t ReadAddr;
 	uint32_t PrefetchAddr;
+	uint8_t ClockCounter;
+	uint8_t BoundaryCyclePenalty;
 	bool Suspended;
+	bool WasFilled;
+	bool Started;
+	bool Sequential;
 };
 
 struct GbaTimerState
@@ -491,6 +505,19 @@ struct GbaApuDebugState
 	GbaNoiseState Noise;
 };
 
+struct GbaGpioState
+{
+	uint8_t Data;
+	uint8_t WritablePins;
+	bool ReadWrite;
+};
+
+struct GbaCartState
+{
+	bool HasGpio;
+	GbaGpioState Gpio;
+};
+
 struct GbaState
 {
 	GbaCpuState Cpu;
@@ -501,23 +528,7 @@ struct GbaState
 	GbaTimersState Timer;
 	GbaRomPrefetchState Prefetch;
 	GbaControlManagerState ControlManager;
-};
-
-enum class GbaArmOpCategory
-{
-	BranchExchangeRegister,
-	Branch,
-	Msr,
-	Mrs,
-	DataProcessing,
-	Multiply,
-	MultiplyLong,
-	SingleDataTransfer,
-	SignedHalfDataTransfer,
-	BlockDataTransfer,
-	SingleDataSwap,
-	SoftwareInterrupt,
-	InvalidOp,
+	GbaCartState Cart;
 };
 
 enum class GbaThumbOpCategory
@@ -543,29 +554,6 @@ enum class GbaThumbOpCategory
 	LongBranchLink,
 
 	InvalidOp,
-};
-
-enum class GbaAluOperation : uint8_t
-{
-	And,
-	Eor,
-	Sub,
-	Rsb,
-
-	Add,
-	Adc,
-	Sbc,
-	Rsc,
-
-	Tst,
-	Teq,
-	Cmp,
-	Cmn,
-
-	Orr,
-	Mov,
-	Bic,
-	Mvn
 };
 
 enum class GbaIrqSource

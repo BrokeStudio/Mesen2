@@ -24,7 +24,17 @@ public class GbaRegisterViewer
 		List<RegEntry> entries = new List<RegEntry>();
 
 		GbaMemoryManagerState memManager = gbaState.MemoryManager;
+		GbaGpioState gpio = gbaState.Cart.Gpio;
+
 		entries.AddRange(new List<RegEntry>() {
+			/*new RegEntry("", "Prefetch"),
+			new RegEntry("", "Read Address", gbaState.Prefetch.ReadAddr, Format.X32),
+			new RegEntry("", "Prefetch Address", gbaState.Prefetch.PrefetchAddr, Format.X32),
+			new RegEntry("", "Length", (gbaState.Prefetch.PrefetchAddr - gbaState.Prefetch.ReadAddr) / 2, Format.X8),
+			new RegEntry("", "Clock Counter", gbaState.Prefetch.ClockCounter),
+			new RegEntry("", "Filled", (gbaState.Prefetch.PrefetchAddr - gbaState.Prefetch.ReadAddr) >= 16),
+			new RegEntry("", "Was Filled", gbaState.Prefetch.WasFilled),*/
+
 			new RegEntry("", "Input IRQ Control"),
 			new RegEntry("$4000132-3", "Register Value", gbaState.ControlManager.KeyControl, Format.X16),
 			new RegEntry("$4000132.0", "A", (gbaState.ControlManager.KeyControl & 0x01) != 0),
@@ -85,12 +95,26 @@ public class GbaRegisterViewer
 			new RegEntry("$4000204.5-6", "Bank $A/B", memManager.PrgWaitStates1[0] + " clocks", null),
 			new RegEntry("$4000204.7", "Bank $A/B - Sequential", memManager.PrgWaitStates1[1] + " clocks", null),
 			new RegEntry("$4000205.0-1", "Bank $C/D", memManager.PrgWaitStates2[0] + " clocks", null),
-			new RegEntry("$4000204.2", "Bank $C/D - Sequential", memManager.PrgWaitStates2[1] + " clocks", null),
-			new RegEntry("$4000204.3", "Prefetch Enabled", memManager.PrefetchEnabled),
+			new RegEntry("$4000205.2", "Bank $C/D - Sequential", memManager.PrgWaitStates2[1] + " clocks", null),
+			new RegEntry("$4000205.6", "Prefetch Enabled", memManager.PrefetchEnabled),
 		});
 
-		return new RegisterViewerTab("Misc", entries, CpuType.Gba, MemoryType.GbaMemory);
+		if(gbaState.Cart.HasGpio) {
+			entries.AddRange(new List<RegEntry>() {
+				new RegEntry("", "Cart - GPIO"),
+				new RegEntry("$80000C4.0", "SCK (RTC)", (gpio.Data & 0x01) != 0),
+				new RegEntry("$80000C4.1", "SIO (RTC)", (gpio.Data & 0x02) != 0),
+				new RegEntry("$80000C4.2", "CS (RTC)", (gpio.Data & 0x04) != 0),
+				new RegEntry("$80000C4.3", "Unused (RTC)", (gpio.Data & 0x04) != 0),
+				new RegEntry("$80000C6.0", "Pin 0 direction", (gpio.WritablePins & 0x01) != 0 ? "Out" : "In", (gpio.WritablePins & 0x01) != 0),
+				new RegEntry("$80000C6.1", "Pin 1 direction", (gpio.WritablePins & 0x02) != 0 ? "Out" : "In", (gpio.WritablePins & 0x02) != 0),
+				new RegEntry("$80000C6.2", "Pin 2 direction", (gpio.WritablePins & 0x04) != 0 ? "Out" : "In", (gpio.WritablePins & 0x04) != 0),
+				new RegEntry("$80000C6.3", "Pin 3 direction", (gpio.WritablePins & 0x08) != 0 ? "Out" : "In", (gpio.WritablePins & 0x08) != 0),
+				new RegEntry("$80000C8.0", "Allow GPIO read", gpio.ReadWrite),
+			});
+		}
 
+		return new RegisterViewerTab("Misc", entries, CpuType.Gba, MemoryType.GbaMemory);
 	}
 
 	private static RegisterViewerTab GetGbaPpuTab(ref GbaState gbaState)
@@ -114,6 +138,8 @@ public class GbaRegisterViewer
 			new RegEntry($"$4000001.5", "Window 0 Enabled", ppu.Window0Enabled),
 			new RegEntry($"$4000001.6", "Window 1 Enabled", ppu.Window1Enabled),
 			new RegEntry($"$4000001.7", "OBJ Window Enabled", ppu.ObjWindowEnabled),
+
+			new RegEntry($"$4000002.0", "Stereoscopic (\"Greenswap\")", ppu.StereoscopicEnabled),
 
 			new RegEntry($"$4000004", "Status", ppu.DispStat, Format.X8),
 
@@ -140,6 +166,7 @@ public class GbaRegisterViewer
 
 				new RegEntry($"${baseAddr:X}.0-1", "Priority", layer.Priority),
 				new RegEntry($"${baseAddr:X}.2-3", "Tileset Address", layer.TilesetAddr),
+				new RegEntry($"${baseAddr:X}.4-5", "Stereoscopic Mode", layer.StereoMode),
 				new RegEntry($"${baseAddr:X}.6", "Mosaic Enabled", layer.Mosaic),
 				new RegEntry($"${baseAddr:X}.7", "BPP Select", layer.Bpp8Mode ? "8 BPP" : "4 BPP", layer.Bpp8Mode),
 

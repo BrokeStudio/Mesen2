@@ -107,7 +107,7 @@ void PceVdc::Exec()
 void PceVdc::TriggerHdsIrqs()
 {
 	if(_needVertBlankIrq) {
-		ProcessEndOfVisibleFrame();
+		TriggerVerticalBlank();
 	}
 	if(_hasSpriteOverflow && _state.EnableOverflowIrq) {
 		_state.SpriteOverflow = true;
@@ -138,7 +138,7 @@ void PceVdc::ProcessEvent()
 
 	switch(_nextEvent) {
 		case PceVdcEvent::LatchScrollY:
-			_needRcrIncrement = true;
+			_needVCounterClock = true;
 			_latchClockY = _state.HClock;
 			IncScrollY();
 			if(!_state.BurstModeEnabled) {
@@ -157,7 +157,6 @@ void PceVdc::ProcessEvent()
 			break;
 
 		case PceVdcEvent::HdsIrqTrigger:
-			_needRcrIncrement = true;
 			if(_evalStartCycle >= 1365) {
 				//New row was about to start, but no time to start sprite eval, next row will have no sprites
 				_spriteCount = 0;
@@ -185,6 +184,7 @@ void PceVdc::SetHorizontalMode(PceVdcModeH hMode)
 			break;
 
 		case PceVdcModeH::Hdw:
+			_needVCounterClock = true;
 			_needRcrIncrement = true;
 			_nextEvent = PceVdcEvent::IncRcrCounter;
 			_nextEventCounter = DotsToClocks((_state.HvLatch.HorizDisplayWidth - 1) * 8) + 2;
@@ -559,8 +559,28 @@ void PceVdc::LoadSpriteTiles()
 	}
 }
 
+bool PceVdc::IsDmaAllowed()
+{
+	if(!_allowDma && !_state.BurstModeEnabled) {
+		//Can't DMA during rendering
+		return false;
+	}
+
+	if(_hMode == PceVdcModeH::Hsw && _console->GetMasterClock() - _hSyncStartClock <= DotsToClocks(8)) {
+		//VRAM accesses are blocked during the first 8 dots after horizontal sync,
+		//which prevents SATB/VRAM DMA from running during that time (based on test rom result)
+		return false;
+	}
+
+	return true;
+}
+
 void PceVdc::ProcessSatbTransfer()
 {
+	if(!IsDmaAllowed()) {
+		return;
+	}
+
 	//This takes 1024 VDC cycles (so 2048/3072/4096 master clocks depending on VCE/VDC speed)
 	//1 word transfered every 4 dots (8 to 16 master clocks, depending on VCE clock divider)
 	_state.SatbTransferNextWordCounter += 3;
@@ -588,7 +608,7 @@ void PceVdc::ProcessSatbTransfer()
 
 void PceVdc::ProcessVramDmaTransfer()
 {
-	if(_vMode == PceVdcModeV::Vdw && !_state.BurstModeEnabled) {
+	if(!IsDmaAllowed()) {
 		return;
 	}
 
@@ -629,18 +649,6 @@ void PceVdc::ProcessVramDmaTransfer()
 
 void PceVdc::SetVertMode(PceVdcModeV vMode)
 {
-	if(_vMode == PceVdcModeV::Vdw && vMode != PceVdcModeV::Vdw) {
-		//Some games (e.g Madou King Granzort) expect the DMA to run even if
-		//VDE is never reached (e.g because VDS+VDW take too much time)
-		//Run it as soon as we leave VDW
-		if(_state.SatbTransferPending || _state.RepeatSatbTransfer) {
-			_state.SatbTransferPending = false;
-			_state.SatbTransferRunning = true;
-			_state.SatbTransferNextWordCounter = 0;
-			_state.SatbTransferOffset = 0;
-		}
-	}
-
 	_vMode = vMode;
 	switch(_vMode) {
 		default:
@@ -649,6 +657,7 @@ void PceVdc::SetVertMode(PceVdcModeV vMode)
 			break;
 
 		case PceVdcModeV::Vdw:
+			_allowDma = false;
 			_vModeCounter = _state.HvLatch.VertDisplayWidth + 1;
 			_state.RcrCounter = 0;
 			break;
@@ -664,16 +673,21 @@ void PceVdc::SetVertMode(PceVdcModeV vMode)
 	}
 }
 
+void PceVdc::ClockVCounter()
+{
+	_vModeCounter--;
+	if(_vModeCounter == 0) {
+		SetVertMode((PceVdcModeV)(((int)_vMode + 1) % 4));
+	}
+	_needVCounterClock = false;
+}
+
 void PceVdc::IncrementRcrCounter()
 {
 	_state.RcrCounter++;
 
 	_needRcrIncrement = false;
-
-	_vModeCounter--;
-	if(_vModeCounter == 0) {
-		SetVertMode((PceVdcModeV)(((int)_vMode + 1) % 4));
-	}
+	ClockVCounter();
 
 	if(_vMode == PceVdcModeV::Vde && _state.RcrCounter == _state.HvLatch.VertDisplayWidth + 1) {
 		_needVertBlankIrq = true;
@@ -732,6 +746,8 @@ void PceVdc::ProcessEndOfScanline()
 
 	if(_needRcrIncrement) {
 		IncrementRcrCounter();
+	} else if(_needVCounterClock) {
+		ClockVCounter();
 	}
 
 	if(_hMode == PceVdcModeH::Hdw) {
@@ -768,15 +784,31 @@ void PceVdc::ProcessEndOfScanline()
 	}
 }
 
-void PceVdc::ProcessEndOfVisibleFrame()
+void PceVdc::TriggerDmaStart()
 {
-	//End of display, trigger irq?
+	_allowDma = true;
+
+	if(_state.SatbTransferPending || _state.RepeatSatbTransfer) {
+		_state.SatbTransferPending = false;
+		_state.SatbTransferRunning = true;
+		_state.SatbTransferNextWordCounter = 0;
+		_state.SatbTransferOffset = 0;
+	}
+}
+
+void PceVdc::TriggerVerticalBlank()
+{
+	//End of display, trigger irq
 	if(_state.EnableVerticalBlankIrq) {
 		_state.VerticalBlank = true;
 		_vpc->SetIrq(this);
 	}
 
 	_needVertBlankIrq = false;
+
+	//Any pending SATB/VRAM DMA starts at the same time as the vblank irq is triggered
+	//This fixes the "new season" screen in "TV Sports Football"
+	TriggerDmaStart();
 }
 
 uint8_t PceVdc::GetTilePixelColor(const uint16_t chr0, const uint16_t chr1, const uint8_t shift)
@@ -913,7 +945,7 @@ void PceVdc::InternalDrawScanline()
 			uint16_t color = _vce->GetPalette(0);
 			for(; xStart < xMax; xStart++) {
 				//In picture, but BG is not enabled, draw bg color
-				out[xStart] = color;
+				out[xStart] = PceVpc::TransparentPixelFlag | color;
 			}
 		}
 	} else {
@@ -921,7 +953,7 @@ void PceVdc::InternalDrawScanline()
 			uint16_t color = _vce->GetPalette(16 * 16);
 			for(; xStart < xMax; xStart++) {
 				//Output hasn't started yet, display overscan color
-				out[xStart] = color;
+				out[xStart] = PceVpc::TransparentPixelFlag | color;
 			}
 		}
 	}
@@ -970,7 +1002,7 @@ void PceVdc::ProcessVramAccesses()
 
 	_transferDelay = 0;
 
-	bool inBgFetch = !_state.BurstModeEnabled && _state.HClock >= _loadBgStart && _state.HClock < _loadBgEnd;
+	bool inBgFetch = !_state.BurstModeEnabled && _state.HClock >= _loadBgStart && _state.HClock < _loadBgEnd && _state.Scanline >= 14 && _state.Scanline < 256;
 	bool accessBlocked;
 
 	if(_vMode != PceVdcModeV::Vdw || _state.BurstModeEnabled || (((!_state.SpritesEnabled || _spriteCount == 0) && !inBgFetch && _vMode == PceVdcModeV::Vdw))) {
@@ -1385,6 +1417,7 @@ void PceVdc::Serialize(Serializer& s)
 
 		SV(_screenOffsetX);
 		SV(_needRcrIncrement);
+		SV(_needVCounterClock);
 		SV(_needVertBlankIrq);
 		SV(_verticalBlankDone);
 
@@ -1413,6 +1446,7 @@ void PceVdc::Serialize(Serializer& s)
 		SV(_nextEvent);
 		SV(_nextEventCounter);
 		SV(_hSyncStartClock);
+		SV(_allowDma);
 
 		SV(_drawSpriteCount);
 		SV(_totalSpriteCount);

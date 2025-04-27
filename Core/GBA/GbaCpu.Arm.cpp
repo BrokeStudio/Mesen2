@@ -1,12 +1,13 @@
 #include "pch.h"
 #include "GBA/GbaCpu.h"
 #include "GBA/GbaMemoryManager.h"
+#include "GBA/GbaCpuMultiply.h"
 #include "Shared/Emulator.h"
 
-GbaArmOpCategory GbaCpu::_armCategory[0x1000];
+ArmOpCategory GbaCpu::_armCategory[0x1000];
 GbaCpu::Func GbaCpu::_armTable[0x1000];
 
-GbaArmOpCategory GbaCpu::GetArmOpCategory(uint32_t opCode)
+ArmOpCategory GbaCpu::GetArmOpCategory(uint32_t opCode)
 {
 	uint16_t opType = ((opCode & 0x0FF00000) >> 16) | ((opCode & 0xF0) >> 4);
 	return _armCategory[opType];
@@ -145,23 +146,23 @@ void GbaCpu::ArmDataProcessing()
 		}
 	}
 	
-	switch((GbaAluOperation)((_opCode >> 21) & 0x0F)) {
-		case GbaAluOperation::And: SetR(dstReg, LogicalOp(op1 & op2, carry, updateFlags)); break;
-		case GbaAluOperation::Eor: SetR(dstReg, LogicalOp(op1 ^ op2, carry, updateFlags)); break;
-		case GbaAluOperation::Sub: SetR(dstReg, Sub(op1, op2, true, updateFlags)); break;
-		case GbaAluOperation::Rsb: SetR(dstReg, Sub(op2, op1, true, updateFlags)); break;
-		case GbaAluOperation::Add: SetR(dstReg, Add(op1, op2, false, updateFlags)); break;
-		case GbaAluOperation::Adc: SetR(dstReg, Add(op1, op2, _state.CPSR.Carry, updateFlags)); break;
-		case GbaAluOperation::Sbc: SetR(dstReg, Sub(op1, op2, _state.CPSR.Carry, updateFlags)); break;
-		case GbaAluOperation::Rsc: SetR(dstReg, Sub(op2, op1, _state.CPSR.Carry, updateFlags)); break;
-		case GbaAluOperation::Tst: LogicalOp(op1 & op2, carry, true); break;
-		case GbaAluOperation::Teq: LogicalOp(op1 ^ op2, carry, true); break;
-		case GbaAluOperation::Cmp: Sub(op1, op2, true, true); break;
-		case GbaAluOperation::Cmn: Add(op1, op2, false, true); break;
-		case GbaAluOperation::Orr: SetR(dstReg, LogicalOp(op1 | op2, carry, updateFlags)); break;
-		case GbaAluOperation::Mov: SetR(dstReg, LogicalOp(op2, carry, updateFlags)); break;
-		case GbaAluOperation::Bic: SetR(dstReg, LogicalOp(op1 & ~op2, carry, updateFlags)); break;
-		case GbaAluOperation::Mvn: SetR(dstReg, LogicalOp(~op2, carry, updateFlags)); break;
+	switch((ArmAluOperation)((_opCode >> 21) & 0x0F)) {
+		case ArmAluOperation::And: SetR(dstReg, LogicalOp(op1 & op2, carry, updateFlags)); break;
+		case ArmAluOperation::Eor: SetR(dstReg, LogicalOp(op1 ^ op2, carry, updateFlags)); break;
+		case ArmAluOperation::Sub: SetR(dstReg, Sub(op1, op2, true, updateFlags)); break;
+		case ArmAluOperation::Rsb: SetR(dstReg, Sub(op2, op1, true, updateFlags)); break;
+		case ArmAluOperation::Add: SetR(dstReg, Add(op1, op2, false, updateFlags)); break;
+		case ArmAluOperation::Adc: SetR(dstReg, Add(op1, op2, _state.CPSR.Carry, updateFlags)); break;
+		case ArmAluOperation::Sbc: SetR(dstReg, Sub(op1, op2, _state.CPSR.Carry, updateFlags)); break;
+		case ArmAluOperation::Rsc: SetR(dstReg, Sub(op2, op1, _state.CPSR.Carry, updateFlags)); break;
+		case ArmAluOperation::Tst: LogicalOp(op1 & op2, carry, true); break;
+		case ArmAluOperation::Teq: LogicalOp(op1 ^ op2, carry, true); break;
+		case ArmAluOperation::Cmp: Sub(op1, op2, true, true); break;
+		case ArmAluOperation::Cmn: Add(op1, op2, false, true); break;
+		case ArmAluOperation::Orr: SetR(dstReg, LogicalOp(op1 | op2, carry, updateFlags)); break;
+		case ArmAluOperation::Mov: SetR(dstReg, LogicalOp(op2, carry, updateFlags)); break;
+		case ArmAluOperation::Bic: SetR(dstReg, LogicalOp(op1 & ~op2, carry, updateFlags)); break;
+		case ArmAluOperation::Mvn: SetR(dstReg, LogicalOp(~op2, carry, updateFlags)); break;
 	}
 
 	if(dstReg == 15 && updateFlags) {
@@ -182,28 +183,23 @@ void GbaCpu::ArmMultiply()
 	bool updateFlags = (_opCode & (1 << 20)) != 0;
 	bool multAndAcc = (_opCode & (1 << 21)) != 0;
 
-	uint32_t rsValue = R(rs);
-	Idle();
-	if((rsValue & 0xFFFFFF00) && (rsValue & 0xFFFFFF00) != 0xFFFFFF00) {
-		Idle();
-	}
-	if((rsValue & 0xFFFF0000) && (rsValue & 0xFFFF0000) != 0xFFFF0000) {
-		Idle();
-	}
-	if((rsValue & 0xFF000000) && (rsValue & 0xFF000000) != 0xFF000000) {
-		Idle();
+	MultiplicationOutput output;
+	if(multAndAcc) {
+		output = GbaCpuMultiply::mla(R(rm), R(rs), R(rn));
+	} else {
+		output = GbaCpuMultiply::mul(R(rm), R(rs));
 	}
 
-	uint32_t result = R(rm) * R(rs);
-
+	Idle(output.CycleCount);
 	if(multAndAcc) {
 		Idle();
-		result += R(rn);
 	}
 
+	uint32_t result = output.Output;
 	SetR(rd, result);
-
+	
 	if(updateFlags) {
+		_state.CPSR.Carry = output.Carry;
 		_state.CPSR.Zero = result == 0;
 		_state.CPSR.Negative = (result & (1 << 31));
 	}
@@ -223,45 +219,34 @@ void GbaCpu::ArmMultiplyLong()
 	bool sign = (_opCode & (1 << 22)) != 0;
 
 	Idle();
-	Idle();
+
+	MultiplicationOutput output;
+	if(sign) {
+		if(multAndAcc) {
+			output = GbaCpuMultiply::smlal(R(rl), R(rh), R(rm), R(rs));
+		} else {
+			output = GbaCpuMultiply::smull(R(rm), R(rs));
+		}
+	} else {
+		if(multAndAcc) {
+			output = GbaCpuMultiply::umlal(R(rl), R(rh), R(rm), R(rs));
+		} else {
+			output = GbaCpuMultiply::umull(R(rm), R(rs));
+		}
+	}
+
+	Idle(output.CycleCount);
 	if(multAndAcc) {
 		Idle();
 	}
 
-	uint64_t result;
-	uint32_t rsValue = R(rs);
-	if(sign) {
-		if((rsValue & 0xFFFFFF00) && (rsValue & 0xFFFFFF00) != 0xFFFFFF00) {
-			Idle();
-		}
-		if((rsValue & 0xFFFF0000) && (rsValue & 0xFFFF0000) != 0xFFFF0000) {
-			Idle();
-		}
-		if((rsValue & 0xFF000000) && (rsValue & 0xFF000000) != 0xFF000000) {
-			Idle();
-		}
-		result = (int64_t)(int32_t)R(rm) * (int64_t)(int32_t)rsValue;
-	} else {
-		if(rsValue & 0xFFFFFF00) {
-			Idle();
-		}
-		if(rsValue & 0xFFFF0000) {
-			Idle();
-		}
-		if(rsValue & 0xFF000000) {
-			Idle();
-		}
-		result = (uint64_t)R(rm) * (uint64_t)rsValue;
-	}
-
-	if(multAndAcc) {
-		result += (uint64_t)R(rl) | ((uint64_t)R(rh) << 32);
-	}
+	uint64_t result = output.Output;
 
 	SetR(rl, (uint32_t)result);
 	SetR(rh, (uint32_t)(result >> 32));
 
 	if(updateFlags) {
+		_state.CPSR.Carry = output.Carry;
 		_state.CPSR.Zero = result == 0;
 		_state.CPSR.Negative = (result & ((uint64_t)1 << 63));
 	}
@@ -547,77 +532,77 @@ bool GbaCpu::CheckConditions(uint32_t condCode)
 
 void GbaCpu::InitArmOpTable()
 {
-	auto addEntry = [=](int i, Func func, GbaArmOpCategory category) {
+	auto addEntry = [=](int i, Func func, ArmOpCategory category) {
 		_armTable[i] = func;
 		_armCategory[i] = category;
 	};
 
 	for(int i = 0; i < 0x1000; i++) {
-		addEntry(i, &GbaCpu::ArmInvalidOp, GbaArmOpCategory::InvalidOp);
+		addEntry(i, &GbaCpu::ArmInvalidOp, ArmOpCategory::InvalidOp);
 	}
 
 	//Data Processing / PSR Transfer (MRS, MSR)
 	//----_00??_????_----_----_----_????_----
 	for(int i = 0; i <= 0x3FF; i++) {
-		GbaAluOperation operation = (GbaAluOperation)((i >> 5) & 0x0F);
+		ArmAluOperation operation = (ArmAluOperation)((i >> 5) & 0x0F);
 		bool setConditionCodes = (i & 0x10) != 0;
-		if(!setConditionCodes && operation >= GbaAluOperation::Tst && operation <= GbaAluOperation::Cmn) {
+		if(!setConditionCodes && operation >= ArmAluOperation::Tst && operation <= ArmAluOperation::Cmn) {
 			if(i & 0x020) {
-				addEntry(0x000 | i, &GbaCpu::ArmMsr, GbaArmOpCategory::Msr);
+				addEntry(0x000 | i, &GbaCpu::ArmMsr, ArmOpCategory::Msr);
 			} else {
-				addEntry(0x000 | i, &GbaCpu::ArmMrs, GbaArmOpCategory::Mrs);
+				addEntry(0x000 | i, &GbaCpu::ArmMrs, ArmOpCategory::Mrs);
 			}
 		} else {
-			addEntry(0x000 | i, &GbaCpu::ArmDataProcessing, GbaArmOpCategory::DataProcessing);
+			addEntry(0x000 | i, &GbaCpu::ArmDataProcessing, ArmOpCategory::DataProcessing);
 		}
 	}
 
 	//Branch and Exchange (BX)
 	//----_0001_0010_----_----_----_0001_----
-	addEntry(0x121, &GbaCpu::ArmBranchExchangeRegister, GbaArmOpCategory::BranchExchangeRegister);
+	addEntry(0x121, &GbaCpu::ArmBranchExchangeRegister, ArmOpCategory::BranchExchangeRegister);
 
 	//Branch and Branch with Link (B, BL)
 	//----_101?_????_----_----_----_????_----
 	for(int i = 0; i <= 0x1FF; i++) {
-		addEntry(0xA00 | i, &GbaCpu::ArmBranch, GbaArmOpCategory::Branch);
+		addEntry(0xA00 | i, &GbaCpu::ArmBranch, ArmOpCategory::Branch);
 	}
 
 	//Single Data Transfer (LDR, STR)
 	//----_01??_????_----_----_----_????_----
 	for(int i = 0; i <= 0x3FF; i++) {
-		addEntry(0x400 | i, &GbaCpu::ArmSingleDataTransfer, GbaArmOpCategory::SingleDataTransfer);
+		addEntry(0x400 | i, &GbaCpu::ArmSingleDataTransfer, ArmOpCategory::SingleDataTransfer);
 	}
 
 	//Halfword and Signed Data Transfer (LDRH / STRH / LDRSB / LDRSH)
 	//----_000?_????_----_----_----_1??1_----
 	for(int i = 0; i <= 0x7F; i++) {
-		addEntry(((i & 0x7C) << 2) | ((i & 0x03) << 1) | 0x09, &GbaCpu::ArmSignedHalfDataTransfer, GbaArmOpCategory::SignedHalfDataTransfer);
+		addEntry(((i & 0x7C) << 2) | ((i & 0x03) << 1) | 0x09, &GbaCpu::ArmSignedHalfDataTransfer, ArmOpCategory::SignedHalfDataTransfer);
 	}
 
 	//Block Data Transfer (LDM, STM)
 	//----_100?_????_----_----_----_????_----
 	for(int i = 0; i <= 0x1FF; i++) {
-		addEntry(0x800 | i, &GbaCpu::ArmBlockDataTransfer, GbaArmOpCategory::BlockDataTransfer);
+		addEntry(0x800 | i, &GbaCpu::ArmBlockDataTransfer, ArmOpCategory::BlockDataTransfer);
 	}
 
 	//Multiply and Multiply-Accumulate (MUL, MLA)
 	//----_0000_00??_----_----_----_1001_----
 	for(int i = 0; i <= 0x03; i++) {
-		addEntry(0x009 | (i << 4), &GbaCpu::ArmMultiply, GbaArmOpCategory::Multiply);
+		addEntry(0x009 | (i << 4), &GbaCpu::ArmMultiply, ArmOpCategory::Multiply);
 	}
 
 	//Multiply Long and Multiply-Accumulate Long (MULL,MLAL)
 	//----_0000_1???_----_----_----_1001_----
 	for(int i = 0; i <= 0x07; i++) {
-		addEntry(0x089 | (i << 4), &GbaCpu::ArmMultiplyLong, GbaArmOpCategory::MultiplyLong);
+		addEntry(0x089 | (i << 4), &GbaCpu::ArmMultiplyLong, ArmOpCategory::MultiplyLong);
 	}
 
 	//Single Data Swap (SWP)
 	//----_0001_0000_----_----_----_1001_----
-	addEntry(0x109, &GbaCpu::ArmSingleDataSwap, GbaArmOpCategory::SingleDataSwap); //word
-	addEntry(0x149, &GbaCpu::ArmSingleDataSwap, GbaArmOpCategory::SingleDataSwap); //byte
+	addEntry(0x109, &GbaCpu::ArmSingleDataSwap, ArmOpCategory::SingleDataSwap); //word
+	addEntry(0x149, &GbaCpu::ArmSingleDataSwap, ArmOpCategory::SingleDataSwap); //byte
 
 	for(int i = 0; i <= 0xFF; i++) {
-		addEntry(0xF00 + i, &GbaCpu::ArmSoftwareInterrupt, GbaArmOpCategory::SoftwareInterrupt);
+		addEntry(0xF00 + i, &GbaCpu::ArmSoftwareInterrupt, ArmOpCategory::SoftwareInterrupt);
 	}
 }

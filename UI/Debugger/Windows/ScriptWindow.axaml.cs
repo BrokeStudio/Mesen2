@@ -37,6 +37,8 @@ namespace Mesen.Debugger.Windows
 		private MesenTextEditor _txtScriptLog;
 		private DispatcherTimer _timer;
 		private ScriptWindowViewModel _model;
+		
+		public ScriptWindowViewModel Model => _model;
 
 		static ScriptWindow()
 		{
@@ -45,7 +47,7 @@ namespace Mesen.Debugger.Windows
 		}
 
 		[Obsolete("For designer only")]
-		public ScriptWindow() : this(new()) { }
+		public ScriptWindow() : this(new(null)) { }
 
 		public ScriptWindow(ScriptWindowViewModel model)
 		{

@@ -110,13 +110,13 @@ LoadRomResult GbaConsole::LoadRom(VirtualFile& romFile)
 
 	_memoryManager.reset(new GbaMemoryManager(_emu, this, _ppu.get(), _dmaController.get(), _controlManager.get(), _timer.get(), _apu.get(), _cart.get(), _serial.get(), _prefetch.get()));
 
-	_prefetch->Init(_memoryManager.get());
-	_cart->Init(_emu, this, _memoryManager.get(), _saveType, _cartType);
+	_prefetch->Init(_memoryManager.get(), _cpu.get());
+	_cart->Init(_emu, this, _memoryManager.get(), _saveType, _rtcType, _cartType);
 	_ppu->Init(_emu, this, _memoryManager.get());
 	_apu->Init(_emu, this, _dmaController.get(), _memoryManager.get());
 	_timer->Init(_memoryManager.get(), _apu.get());
 	_dmaController->Init(_cpu.get(), _memoryManager.get(), _prefetch.get());
-	_cpu->Init(_emu, _memoryManager.get());
+	_cpu->Init(_emu, _memoryManager.get(), _prefetch.get());
 	_serial->Init(_emu, _memoryManager.get());
 	_controlManager->Init(_memoryManager.get());
 	
@@ -155,10 +155,18 @@ void GbaConsole::InitCart(VirtualFile& romFile, vector<uint8_t>& romData)
 		_cartType = GbaCartridgeType::TiltSensor;
 	}
 
-	string rtcMarker = "SIIRTC_V001";
-	if(std::search(romData.begin(), romData.end(), rtcMarker.begin(), rtcMarker.end()) != romData.end()) {
-		MessageManager::Log("RTC detected.");
-		_cartType = GbaCartridgeType::Rtc;
+	_rtcType = _emu->GetSettings()->GetGbaConfig().RtcType;
+	if(_rtcType == GbaRtcType::AutoDetect) {
+		string rtcMarker = "SIIRTC_V001";
+		if(std::search(romData.begin(), romData.end(), rtcMarker.begin(), rtcMarker.end()) != romData.end()) {
+			_rtcType = GbaRtcType::Enabled;
+		} else {
+			_rtcType = GbaRtcType::Disabled;
+		}
+	}
+
+	if(_rtcType == GbaRtcType::Enabled) {
+		MessageManager::Log("RTC enabled");
 	}
 
 	InitSaveRam(gameCode, romData);
@@ -174,8 +182,8 @@ void GbaConsole::InitSaveRam(string& gameCode, vector<uint8_t>& romData)
 		if(gameCode == "A2YE") {
 			//Force no backup data for Top Gun, otherwise A button doesn't work in menu
 			_saveType = GbaSaveType::None;
-		} else if(gameCode == "AYGE") {
-			//Force 512-byte eeprom for Gauntlet (auto-detect logic doesn't work)
+		} else if(gameCode == "AYGE" || gameCode == "ALUE" || gameCode == "ALUP") {
+			//Force 512-byte eeprom for Gauntlet (AYGE) and Super Monkey Ball Jr. (ALUE & ALUP) (auto-detect logic doesn't work)
 			_saveType = GbaSaveType::Eeprom512;
 		} else if(gameCode == "AI2E") {
 			//Iridion II crashes if it has SRAM, force it to none
@@ -187,11 +195,11 @@ void GbaConsole::InitSaveRam(string& gameCode, vector<uint8_t>& romData)
 				}
 			};
 
-			checkMarker("SRAM_", GbaSaveType::Sram);
-			checkMarker("EEPROM_", GbaSaveType::EepromUnknown);
-			checkMarker("FLASH_", GbaSaveType::Flash64);
-			checkMarker("FLASH512_", GbaSaveType::Flash64);
-			checkMarker("FLASH1M_", GbaSaveType::Flash128);
+			checkMarker("SRAM_V", GbaSaveType::Sram);
+			checkMarker("EEPROM_V", GbaSaveType::EepromUnknown);
+			checkMarker("FLASH_V", GbaSaveType::Flash64);
+			checkMarker("FLASH512_V", GbaSaveType::Flash64);
+			checkMarker("FLASH1M_V", GbaSaveType::Flash128);
 
 			if(_saveType == GbaSaveType::AutoDetect) {
 				//Default to SRAM when nothing is found, for best compatibility
@@ -266,6 +274,7 @@ GbaState GbaConsole::GetState()
 	state.Timer = _timer->GetState();
 	state.Prefetch = _prefetch->GetState();
 	state.ControlManager = _controlManager->GetState();
+	state.Cart = _cart->GetState();
 	return state;
 }
 
@@ -292,6 +301,11 @@ GbaCpu* GbaConsole::GetCpu()
 GbaPpu* GbaConsole::GetPpu()
 {
 	return _ppu.get();
+}
+
+GbaApu* GbaConsole::GetApu()
+{
+	return _apu.get();
 }
 
 GbaDmaController* GbaConsole::GetDmaController()

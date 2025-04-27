@@ -48,6 +48,7 @@ private:
 	unique_ptr<GbaRomPrefetch> _prefetch;
 
 	GbaSaveType _saveType = GbaSaveType::AutoDetect;
+	GbaRtcType _rtcType = GbaRtcType::AutoDetect;
 	GbaCartridgeType _cartType = GbaCartridgeType::Default;
 
 	uint8_t* _prgRom = nullptr;
@@ -82,6 +83,7 @@ public:
 
 	GbaCpu* GetCpu();
 	GbaPpu* GetPpu();
+	GbaApu* GetApu();
 	GbaDmaController* GetDmaController();
 	GbaState GetState();
 	void GetConsoleState(BaseState& state, ConsoleType consoleType) override;

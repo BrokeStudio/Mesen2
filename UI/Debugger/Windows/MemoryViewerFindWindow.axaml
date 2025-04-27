@@ -16,7 +16,6 @@
 	Width="360"
 	Height="260"
 	Name="root"
-	ShowInTaskbar="False"
 	CanResize="False"
 	Title="{l:Translate wndTitle}"
 >
@@ -69,7 +68,13 @@
 				Grid.Column="1"
 				Name="txtValue"
 				HorizontalAlignment="Stretch"
-				Text="{Binding SearchString}"
+				AcceptsReturn="True"
+				VerticalContentAlignment="Center"
+				ScrollViewer.HorizontalScrollBarVisibility="Hidden"
+				ScrollViewer.VerticalScrollBarVisibility="Disabled"
+				Height="21"
+				MinHeight="21"
+				Text="{Binding SearchString, Converter={StaticResource NullTextConverter}}"
 				MaxLength="300"
 			/>
 			<Image

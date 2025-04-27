@@ -45,7 +45,10 @@ namespace Mesen.Debugger.ViewModels
 		[Reactive] public List<ContextMenuAction> HelpMenuActions { get; private set; } = new();
 		[Reactive] public List<ContextMenuAction> ToolbarActions { get; private set; } = new();
 
-		public ScriptWindowViewModel(ScriptStartupBehavior? behavior = null)
+		[Obsolete("For designer only")]
+		public ScriptWindowViewModel() : this(null) { }
+
+		public ScriptWindowViewModel(ScriptStartupBehavior? behavior)
 		{
 			this.WhenAnyValue(x => x.ScriptName).Select(x => {
 				string wndTitle = ResourceHelper.GetViewLabel(nameof(ScriptWindow), "wndTitle");

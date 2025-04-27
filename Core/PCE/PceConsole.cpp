@@ -27,6 +27,10 @@ PceConsole::PceConsole(Emulator* emu)
 	_emu = emu;
 }
 
+PceConsole::~PceConsole()
+{
+}
+
 void PceConsole::Reset()
 {
 	//The PC Engine has no reset button, behave like power cycle
@@ -67,6 +71,13 @@ LoadRomResult PceConsole::LoadRom(VirtualFile& romFile)
 		if((romData.size() % 0x2000) == 512) {
 			//File probably has header, discard it
 			romData.erase(romData.begin(), romData.begin() + 512);
+		}
+
+		uint32_t power = (uint32_t)std::log2(romData.size());
+		if(romData.size() > ((uint64_t)1 << power)) {
+			//If size isn't a power of 2, pad the end of the ROM to the next power of 2
+			uint32_t newSize = 1 << (power + 1);
+			romData.insert(romData.end(), newSize - romData.size(), 0);
 		}
 
 		if(consoleType == PceConsoleType::Auto && (romFile.GetFileExtension() == ".sgx" || IsSuperGrafxCard(crc32))) {
@@ -339,7 +350,7 @@ AddressInfo PceConsole::GetAbsoluteAddress(AddressInfo& relAddress)
 
 AddressInfo PceConsole::GetRelativeAddress(AddressInfo& absAddress, CpuType cpuType)
 {
-	return _memoryManager->GetRelativeAddress(absAddress);
+	return _memoryManager->GetRelativeAddress(absAddress, _cpu->GetState().PC);
 }
 
 PceVideoState PceConsole::GetVideoState()

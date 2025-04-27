@@ -61,9 +61,9 @@ namespace Mesen.Debugger.ViewModels
 
 			MaxAddress = DebugApi.GetMemorySize(CpuType.ToMemoryType()) - 1;
 
-			this.WhenAnyValue(x => x.Code, x => x.StartAddress).Subscribe(_ => {
+			AddDisposable(this.WhenAnyValue(x => x.Code, x => x.StartAddress).Subscribe(_ => {
 				UpdateAssembly(Code);
-			});
+			}));
 		}
 
 		public void InitMenu(Window wnd)
@@ -97,7 +97,9 @@ namespace Mesen.Debugger.ViewModels
 			StartAddress = address;
 			Code = code;
 
-			_originalCode = DebugApi.GetMemoryValues(CpuType.ToMemoryType(), (uint)StartAddress, (uint)(StartAddress + OriginalByteCount - 1));
+			if(OriginalByteCount > 0) {
+				_originalCode = DebugApi.GetMemoryValues(CpuType.ToMemoryType(), (uint)StartAddress, (uint)(StartAddress + OriginalByteCount - 1));
+			}
 		}
 
 		private void UpdateAssembly(string code)

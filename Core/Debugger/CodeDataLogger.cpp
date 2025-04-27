@@ -50,11 +50,10 @@ bool CodeDataLogger::LoadCdlFile(string cdlFilepath, bool autoResetCdl)
 {
 	VirtualFile cdlFile = cdlFilepath;
 	if(cdlFile.IsValid()) {
-		uint32_t fileSize = (uint32_t)cdlFile.GetSize();
-		vector<uint8_t> cdlData;
-		cdlFile.ReadFile(cdlData);
+		vector<uint8_t>& cdlData = cdlFile.GetData();
+		uint32_t fileSize = (uint32_t)cdlData.size();
 
-		if(fileSize >= _memSize) {
+		if(fileSize >= _memSize && fileSize >= CodeDataLogger::HeaderSize) {
 			Reset();
 
 			if(memcmp(cdlData.data(), "CDLv2", 5) == 0) {
@@ -103,14 +102,17 @@ CdlStatistics CodeDataLogger::GetStatistics()
 {
 	uint32_t codeSize = 0;
 	uint32_t dataSize = 0;
+	uint32_t bothSize = 0;
 
 	for(int i = 0, len = _memSize; i < len; i++) {
-		if(IsCode(i)) {
-			codeSize++;
-		} else if(IsData(i)) {
-			dataSize++;
-		}
+		uint32_t isCode = (uint32_t)(_cdlData[i] & CdlFlags::Code);
+		uint32_t isData = (uint32_t)(_cdlData[i] & CdlFlags::Data) >> 1;
+		codeSize += isCode;
+		dataSize += isData;
+		bothSize += isCode & isData;
 	}
+
+	dataSize -= bothSize;
 
 	CdlStatistics stats = {};
 	stats.CodeBytes = codeSize;

@@ -1,14 +1,16 @@
 #include "pch.h"
 #include "GBA/GbaCpu.h"
 #include "GBA/GbaMemoryManager.h"
+#include "GBA/GbaRomPrefetch.h"
 #include "Shared/Emulator.h"
 #include "Shared/EmuSettings.h"
 #include "Utilities/Serializer.h"
 
-void GbaCpu::Init(Emulator* emu, GbaMemoryManager* memoryManager)
+void GbaCpu::Init(Emulator* emu, GbaMemoryManager* memoryManager, GbaRomPrefetch* prefetch)
 {
 	_emu = emu;
 	_memoryManager = memoryManager;
+	_prefetch = prefetch;
 	
 	_state = {};
 	_state.Pipeline.ReloadRequested = true;
@@ -104,6 +106,8 @@ void GbaCpu::ReloadPipeline()
 
 	pipe.ReloadRequested = false;
 	pipe.Fetch.Address = _state.R[15] = _state.R[15] & (_state.CPSR.Thumb ? ~0x01 : ~0x03);
+	_prefetch->ForceNonSequential(_state.R[15]);
+
 	pipe.Fetch.OpCode = ReadCode(pipe.Mode, pipe.Fetch.Address);
 	pipe.Execute = pipe.Decode;
 	pipe.Decode = pipe.Fetch;
@@ -181,6 +185,16 @@ void GbaCpu::Idle()
 	_state.Pipeline.Mode &= ~GbaAccessMode::Sequential;
 	_memoryManager->ProcessIdleCycle();
 #endif
+}
+
+void GbaCpu::Idle(uint8_t cycleCount)
+{
+	switch(cycleCount) {
+		case 4: Idle(); [[fallthrough]];
+		case 3: Idle(); [[fallthrough]];
+		case 2: Idle(); [[fallthrough]];
+		case 1: Idle(); break;
+	}
 }
 
 uint32_t GbaCpu::R(uint8_t reg)

@@ -12,8 +12,8 @@
 #include "Utilities/CRC32.h"
 
 const std::initializer_list<string> VirtualFile::RomExtensions = {
-	".nes", ".fds", ".unif", ".unf", ".nsf", ".nsfe", ".studybox",
-	".sfc", ".swc", ".fig", ".smc", ".bs", ".spc",
+	".nes", ".fds", ".qd", ".unif", ".unf", ".nsf", ".nsfe", ".studybox",
+	".sfc", ".swc", ".fig", ".smc", ".bs", ".st", ".spc",
 	".gb", ".gbc", ".gbx", ".gbs",
 	".pce", ".sgx", ".cue", ".hes",
 	".sms", ".gg", ".sg", ".col",
@@ -233,6 +233,12 @@ void VirtualFile::InitChunks()
 		_useChunks = true;
 		_chunks.resize(GetSize() / VirtualFile::ChunkSize + 1);
 	}
+}
+
+vector<uint8_t>& VirtualFile::GetData()
+{
+	LoadFile();
+	return _data;
 }
 
 bool VirtualFile::ReadFile(vector<uint8_t>& out)

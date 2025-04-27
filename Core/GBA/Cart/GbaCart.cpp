@@ -20,7 +20,7 @@ GbaCart::~GbaCart()
 {
 }
 
-void GbaCart::Init(Emulator* emu, GbaConsole* console, GbaMemoryManager* memoryManager, GbaSaveType saveType, GbaCartridgeType cartType)
+void GbaCart::Init(Emulator* emu, GbaConsole* console, GbaMemoryManager* memoryManager, GbaSaveType saveType, GbaRtcType rtcType, GbaCartridgeType cartType)
 {
 	_emu = emu;
 
@@ -29,11 +29,11 @@ void GbaCart::Init(Emulator* emu, GbaConsole* console, GbaMemoryManager* memoryM
 			_tiltSensor.reset(new GbaTiltSensor(emu));
 			console->GetControlManager()->AddSystemControlDevice(_tiltSensor);
 			break;
+	}
 
-		case GbaCartridgeType::Rtc:
-			_rtc.reset(new GbaRtc(emu));
-			_gpio.reset(new GbaGpio(_rtc.get()));
-			break;
+	if(rtcType == GbaRtcType::Enabled) {
+		_rtc.reset(new GbaRtc(emu));
+		_gpio.reset(new GbaGpio(_rtc.get()));
 	}
 
 	_prgRom = (uint8_t*)_emu->GetMemory(MemoryType::GbaPrgRom).Memory;
@@ -179,6 +179,16 @@ void GbaCart::SaveBattery()
 	if(_rtc) {
 		_rtc->SaveBattery();
 	}
+}
+
+GbaCartState GbaCart::GetState()
+{
+	GbaCartState state = {};
+	if(_gpio) {
+		state.HasGpio = true;
+		state.Gpio = _gpio->GetState();
+	}
+	return state;
 }
 
 void GbaCart::Serialize(Serializer& s)

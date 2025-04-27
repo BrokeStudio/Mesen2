@@ -65,6 +65,10 @@ double GbaWaveChannel::GetOutput()
 
 void GbaWaveChannel::UpdateOutput()
 {
+	if(!_state.Enabled) {
+		return;
+	}
+
 	if(_state.OverrideVolume) {
 		_state.Output = _state.SampleBuffer * 3 / 4;
 	} else if(_state.Volume) {
@@ -84,7 +88,6 @@ void GbaWaveChannel::Exec(uint32_t clocksToRun)
 	do {
 		uint32_t minTimer = std::min<uint32_t>(clocksToRun, _state.Timer);
 		_state.Timer -= minTimer;
-		_allowRamAccess = false;
 
 		if(_state.Timer == 0) {
 			//The wave channel's frequency timer period is set to (2048-frequency)*2.
@@ -104,8 +107,6 @@ void GbaWaveChannel::Exec(uint32_t clocksToRun)
 
 			//The DAC receives the current value from the upper/lower nibble of the sample buffer, shifted right by the volume control. 
 			needUpdate = true;
-
-			_allowRamAccess = true;
 		}
 		clocksToRun -= minTimer;
 	} while(clocksToRun);
@@ -163,6 +164,7 @@ void GbaWaveChannel::Write(uint16_t addr, uint8_t value)
 			break;
 
 		case 4: {
+			bool prevEnabled = _state.Enabled;
 			_state.Frequency = (_state.Frequency & 0xFF) | ((value & 0x07) << 8);
 
 			if(value & 0x80) {
@@ -189,6 +191,11 @@ void GbaWaveChannel::Write(uint16_t addr, uint8_t value)
 			}
 
 			_state.LengthEnabled = (value & 0x40);
+
+			if(!_state.Enabled && prevEnabled) {
+				_state.Output = 0;
+				UpdateOutput();
+			}
 			break;
 		}
 	}
@@ -196,33 +203,23 @@ void GbaWaveChannel::Write(uint16_t addr, uint8_t value)
 
 void GbaWaveChannel::WriteRam(uint16_t addr, uint8_t value)
 {
+	//TODOGBA wave data is stored in a shift register on GBA
 	uint8_t bank = (_state.SelectedBank ^ 1) << 4;
-	if(!_state.Enabled) {
-		_state.Ram[bank | (addr & 0x0F)] = value;
-	} else if(_allowRamAccess) {
-		//TODOGBA when is wave ram accessible on gba?
-		_state.Ram[_state.Position >> 1] = value;
-	}
+	_state.Ram[bank | (addr & 0x0F)] = value;
 }
 
 uint8_t GbaWaveChannel::ReadRam(uint16_t addr)
 {
+	//TODOGBA wave data is stored in a shift register on GBA
 	uint8_t bank = (_state.SelectedBank ^ 1) << 4;
-	if(!_state.Enabled) {
-		return _state.Ram[bank | (addr & 0x0F)];
-	} else if(_allowRamAccess) {
-		//TODOGBA when is wave ram accessible on gba?
-		return _state.Ram[_state.Position >> 1];
-	} else {
-		return 0xFF;
-	}
+	return _state.Ram[bank | (addr & 0x0F)];
 }
 
 void GbaWaveChannel::Serialize(Serializer& s)
 {
 	SV(_state.DacEnabled); SV(_state.SampleBuffer); SV(_state.Position); SV(_state.Volume); SV(_state.Frequency);
 	SV(_state.Length); SV(_state.LengthEnabled); SV(_state.Enabled); SV(_state.Timer); SV(_state.Output);
-	SVArray(_state.Ram, 0x20); SV(_allowRamAccess);
+	SVArray(_state.Ram, 0x20);
 	SV(_state.DoubleLength);
 	SV(_state.SelectedBank);
 	SV(_state.OverrideVolume);

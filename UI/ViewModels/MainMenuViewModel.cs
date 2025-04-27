@@ -584,7 +584,7 @@ namespace Mesen.ViewModels
 
 						case ConsoleType.Sms:
 							switch(MainWindow.RomInfo.Format) {
-								default: case RomFormat.Sms: ConfigManager.Config.Sms.GameGearRegion = region; break;
+								default: case RomFormat.Sms: ConfigManager.Config.Sms.Region = region; break;
 								case RomFormat.GameGear: ConfigManager.Config.Sms.GameGearRegion = region; break;
 								case RomFormat.ColecoVision: ConfigManager.Config.Cv.Region = region; break;
 							}
@@ -947,6 +947,12 @@ namespace Mesen.ViewModels
 					OnClick = () => DebuggerWindow.GetOrOpenWindow(CpuType.Sa1)
 				},
 				new ContextMenuAction() {
+					ActionType = ActionType.OpenSt018Debugger,
+					Shortcut = () => ConfigManager.Config.Debug.Shortcuts.Get(DebuggerShortcut.OpenSt018Debugger),
+					IsVisible = () => MainWindow.RomInfo.CpuTypes.Contains(CpuType.St018),
+					OnClick = () => DebuggerWindow.GetOrOpenWindow(CpuType.St018)
+				},
+				new ContextMenuAction() {
 					ActionType = ActionType.OpenGameboyDebugger,
 					Shortcut = () => ConfigManager.Config.Debug.Shortcuts.Get(DebuggerShortcut.OpenGameboyDebugger),
 					IsVisible = () => MainWindow.RomInfo.ConsoleType == ConsoleType.Snes && MainWindow.RomInfo.CpuTypes.Contains(CpuType.Gameboy),
@@ -1031,7 +1037,7 @@ namespace Mesen.ViewModels
 					ActionType = ActionType.OpenScriptWindow,
 					Shortcut = () => ConfigManager.Config.Debug.Shortcuts.Get(DebuggerShortcut.OpenScriptWindow),
 					IsEnabled = () => IsGameRunning,
-					OnClick = () => DebugWindowManager.OpenDebugWindow(() => new ScriptWindow(new ScriptWindowViewModel()))
+					OnClick = () => DebugWindowManager.OpenDebugWindow(() => new ScriptWindow(new ScriptWindowViewModel(null)))
 				},
 				new ContextMenuAction() {
 					ActionType = ActionType.OpenWatchWindow,
@@ -1259,7 +1265,7 @@ namespace Mesen.ViewModels
 
 					if(await MesenMsgBox.Show(wnd, "InstallHdPackConfirmReset", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK) {
 						//Power cycle game if the user agrees
-						EmuApi.PowerCycle();
+						LoadRomHelper.PowerCycle();
 					}
 				}
 			} catch {

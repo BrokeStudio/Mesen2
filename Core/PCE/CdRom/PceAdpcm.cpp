@@ -33,6 +33,7 @@ PceAdpcm::~PceAdpcm()
 
 void PceAdpcm::Reset()
 {
+	_state.PlayRequest = false;
 	_state.WriteClockCounter = 0;
 	_state.ReadClockCounter = 0;
 	_state.ReadAddress = 0;
@@ -42,7 +43,7 @@ void PceAdpcm::Reset()
 	SetHalfReached(false);
 	_state.AdpcmLength = 0;
 	_state.Nibble = false;
-	_currentOutput = 0;
+	_currentOutput = 2048;
 	_magnitude = 0;
 }
 
@@ -103,6 +104,10 @@ void PceAdpcm::SetControl(uint8_t value)
 	if((value & 0x08) && !(_state.Control & 0x08)) {
 		_state.ReadAddress = _state.AddressPort - ((value & 0x04) ? 0 : 1);
 		LogDebug("[ADPCM] Update read addr");
+	}
+
+	if(!_state.Playing && (value & 0x20)) {
+		_state.PlayRequest = true;
 	}
 
 	_state.Control = value;
@@ -168,9 +173,9 @@ void PceAdpcm::ProcessDmaRequest()
 			}
 		}
 	} else if(!_scsi->CheckSignal(Ack) && !_scsi->CheckSignal(Cd) && _scsi->CheckSignal(Io) && _scsi->CheckSignal(Req)) {
-		//Some delay is required here according to test rom
-		//Valid range is 10-14 (higher or lower fails the test)
-		_dmaWriteCounter = 12;
+		//Some delay is required here according to "verificator" test rom ("cdd dma timings" test)
+		//Values between 18 to 22 pass the test (higher or lower fails)
+		_dmaWriteCounter = 20;
 	}
 }
 
@@ -195,7 +200,7 @@ void PceAdpcm::Exec()
 	//Called every 3 master clocks
 	ProcessFlags();
 
-	if(_state.Playing || (_state.Control & 0x20)) {
+	if(_state.Playing || _state.PlayRequest || (_state.Control & 0x20)) {
 		_nextSampleCounter += 3;
 		if(_nextSampleCounter >= _clocksPerSample) {
 			PlaySample();
@@ -218,7 +223,7 @@ void PceAdpcm::Exec()
 
 	ProcessFlags();
 
-	_needExec = _state.Playing || (_state.Control & 0x20) || _state.ReadClockCounter || _state.WriteClockCounter || dmaRequested || _dmaWriteCounter;
+	_needExec = _state.Playing || _state.PlayRequest || (_state.Control & 0x20) || _state.ReadClockCounter || _state.WriteClockCounter || dmaRequested || _dmaWriteCounter;
 }
 
 void PceAdpcm::Write(uint16_t addr, uint8_t value)
@@ -292,21 +297,21 @@ void PceAdpcm::PlaySample()
 	if(_state.Control & 0x80) {
 		//Reset flag is enabled
 		_state.Playing = (_state.Control & 0x20) != 0;
+		_state.PlayRequest = false;
 		return;
 	}
 
-	if((_state.Control & 0x40) && _state.AdpcmLength == 0) {
-		_state.Control &= ~0x20;
-	}
-
-	if(!(_state.Control & 0x20)) {
+	if(((_state.Control & 0x40) && _state.AdpcmLength == 0) || !(_state.Control & 0x20) || (!_state.Playing && !_state.PlayRequest)) {
+		_state.PlayRequest = false;
 		_state.Playing = false;
 		return;
 	}
 
-	if(!_state.Playing) {
+	if(_state.PlayRequest) {
+		_state.PlayRequest = false;
 		_state.Playing = true;
 		_currentOutput = 2048;
+		_magnitude = 0;
 	}
 
 	uint8_t data;
@@ -324,7 +329,7 @@ void PceAdpcm::PlaySample()
 	int8_t sign = data & 0x08 ? -1 : 1;
 
 	int16_t adjustment = _stepSize[(_magnitude << 3) | value] * sign;
-	_currentOutput += adjustment;
+	_currentOutput = (_currentOutput + adjustment) & 0xFFF;
 	
 	_magnitude = std::clamp(_magnitude + _stepFactor[value], 0, 48);
 
@@ -333,7 +338,7 @@ void PceAdpcm::PlaySample()
 		SetEndReached(true);
 	}
 
-	int16_t out = (std::clamp<int16_t>(_currentOutput, 0, 4095) - 2048) * 10;
+	int16_t out = (_currentOutput - 2048) * 10;
 	_samplesToPlay.push_back(out);
 	_samplesToPlay.push_back(out);
 }
