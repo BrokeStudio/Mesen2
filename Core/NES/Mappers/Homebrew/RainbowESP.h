@@ -10,6 +10,7 @@
 #include <deque>
 #include <thread>
 #include <fstream>
+#include <chrono>
 
 using std::pair;
 using std::array;
