@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "NES/Mappers/Homebrew/Rainbow.h"
 #include "NES/Mappers/Homebrew/RainbowAudio.h"
-#include "NES/Mappers/Homebrew/RainbowAudio.h"
+#include "NES/Mappers/Homebrew/RainbowESP.h"
 #include "NES/Mappers/Homebrew/FlashS29.h"
 #include "NES/NesConsole.h"
 #include "NES/NesCpu.h"
@@ -24,6 +24,9 @@ void Rainbow::InitMapper()
 	UpdateState();
 
 	AddRegisterRange(0x6000, 0xFFFF, MemoryOperation::Any);
+
+	_esp = new BrokeStudioFirmware;
+	EspClearMessageReceived();
 
 	_orgPrgRom = vector<uint8_t>(_prgRom, _prgRom + _prgSize);
 	_orgChrRom = vector<uint8_t>(_chrRom, _chrRom + _chrRomSize);
@@ -125,23 +128,23 @@ void Rainbow::GenerateOamClear()
 
 	int i = 6;
 	for(int spr = 0; spr < 64; spr++) {
-		_oamCode[i++] = 0xA9; //LDA #spr
-		_oamCode[i++] = spr * 4;
+		_oamCode[0x80 + i++] = 0xA9; //LDA #spr
+		_oamCode[0x80 + i++] = spr * 4;
 
 		if(spr == 0) {
-			_oamCode[i++] = 0xAA; //TAX
-			_oamCode[i++] = 0xCA; //DEX
+			_oamCode[0x80 + i++] = 0xAA; //TAX
+			_oamCode[0x80 + i++] = 0xCA; //DEX
 		}
 
-		_oamCode[i++] = 0x8D; //STA $2003
-		_oamCode[i++] = 0x03;
-		_oamCode[i++] = 0x20;
+		_oamCode[0x80 + i++] = 0x8D; //STA $2003
+		_oamCode[0x80 + i++] = 0x03;
+		_oamCode[0x80 + i++] = 0x20;
 
-		_oamCode[i++] = 0x8E; //STX $2004
-		_oamCode[i++] = 0x04;
-		_oamCode[i++] = 0x20;
+		_oamCode[0x80 + i++] = 0x8E; //STX $2004
+		_oamCode[0x80 + i++] = 0x04;
+		_oamCode[0x80 + i++] = 0x20;
 	}
-	_oamCode[i++] = 0x60; //RTS
+	_oamCode[0x80 + i++] = 0x60; //RTS
 }
 
 void Rainbow::GenerateExtUpdate()
@@ -153,14 +156,14 @@ void Rainbow::GenerateExtUpdate()
 
 	int i = 2;
 	for(int spr = 0; spr < 64; spr++) {
-		_oamCode[i++] = 0xA9; //LDA #[fpga ram value]
-		_oamCode[i++] = _mapperRam[0x1800 + (_oamExtUpdatePage * 0x40) + spr];
+		_oamCode[0x80 + i++] = 0xA9; //LDA #[fpga ram value]
+		_oamCode[0x80 + i++] = _mapperRam[0x1800 + (_oamExtUpdatePage * 0x40) + spr];
 
-		_oamCode[i++] = 0x8D; //STA $42xx
-		_oamCode[i++] = spr;
-		_oamCode[i++] = 0x42;
+		_oamCode[0x80 + i++] = 0x8D; //STA $42xx
+		_oamCode[0x80 + i++] = spr;
+		_oamCode[0x80 + i++] = 0x42;
 	}
-	_oamCode[i++] = 0x60; //RTS
+	_oamCode[0x80 + i++] = 0x60; //RTS
 }
 
 void Rainbow::GenerateOamSlowUpdate()
@@ -171,22 +174,22 @@ void Rainbow::GenerateOamSlowUpdate()
 	_oamCodeLocked = true;
 
 	int i = 0;
-	_oamCode[i++] = 0xA9; //LDA #00
-	_oamCode[i++] = 0x00;
+	_oamCode[0x80 + i++] = 0xA9; //LDA #00
+	_oamCode[0x80 + i++] = 0x00;
 
-	_oamCode[i++] = 0x8D; //STA $2003
-	_oamCode[i++] = 0x03;
-	_oamCode[i++] = 0x20;
+	_oamCode[0x80 + i++] = 0x8D; //STA $2003
+	_oamCode[0x80 + i++] = 0x03;
+	_oamCode[0x80 + i++] = 0x20;
 
 	for(int j = 0; j < 256; j++) {
-		_oamCode[i++] = 0xA9; //LDA #[fpga ram value]
-		_oamCode[i++] = _mapperRam[0x1800 + (_oamSlowUpdatePage * 0x100) + j];
+		_oamCode[0x80 + i++] = 0xA9; //LDA #[fpga ram value]
+		_oamCode[0x80 + i++] = _mapperRam[0x1800 + (_oamSlowUpdatePage * 0x100) + j];
 
-		_oamCode[i++] = 0x8D; //STA $2004
-		_oamCode[i++] = 0x04;
-		_oamCode[i++] = 0x20;
+		_oamCode[0x80 + i++] = 0x8D; //STA $2004
+		_oamCode[0x80 + i++] = 0x04;
+		_oamCode[0x80 + i++] = 0x20;
 	}
-	_oamCode[i++] = 0x60; //RTS
+	_oamCode[0x80 + i++] = 0x60; //RTS
 }
 
 PrgMemoryType Rainbow::GetWorkRamType()
@@ -263,6 +266,7 @@ void Rainbow::UpdateState()
 
 	SetCpuMemoryMapping(0x5000, 0x5FFF, PrgMemoryType::MapperRam, _fpgaRamBank * 0x1000, MemoryAccessType::ReadWrite);
 	SetCpuMemoryMapping(0x4800, 0x4FFF, PrgMemoryType::MapperRam, 0x1800, MemoryAccessType::ReadWrite);
+	SetCpuMemoryMapping(0x4200, 0x47FF, _oamCode, 0x00, 0x600, MemoryAccessType::Read);
 
 	uint8_t chrBankCount = (1 << _chrMode);
 	uint16_t chrBankSize = 0x2000 >> _chrMode;
@@ -477,7 +481,7 @@ uint8_t Rainbow::ReadChr(uint32_t addr)
 
 void Rainbow::UpdateIrqStatus()
 {
-	bool active = (_cpuIrqEnabled && _cpuIrqPending) || (_slIrqEnabled && _slIrqPending);
+	bool active = (_cpuIrqEnabled && _cpuIrqPending) || (_slIrqEnabled && _slIrqPending) || (_wifiIrqEnabled && _wifiIrqPending);
 	if(active) {
 		if(!_console->GetCpu()->HasIrqSource(IRQSource::External)) {
 			_jitterCounter = 0;
@@ -592,7 +596,12 @@ uint8_t Rainbow::ReadRegister(uint16_t addr)
 		case 0x4286: GenerateOamClear(); break;
 
 		case 0x4190: return (uint8_t)_espEnabled | ((uint8_t)_wifiIrqEnabled << 1);
-		case 0x4191: return ((uint8_t)_dataReady << 6) | ((uint8_t)_dataReceived << 7);
+		case 0x4191:
+		{
+			_dataReceived = EspMessageReceived() ? 1 : 0;
+			_dataReady = _esp->getDataReadyIO() ? 1 : 0;
+			return ((uint8_t)_dataReady << 6) | ((uint8_t)_dataReceived << 7);
+		}
 		case 0x4192: return (uint8_t)_dataSent << 7;
 
 		case 0xFFFA:
@@ -621,7 +630,8 @@ uint8_t Rainbow::ReadRegister(uint16_t addr)
 		if(addr >= 0x4286) {
 			_oamCodeLocked = false;
 		}
-		return _oamCode[addr - 0x4280];
+		// return _oamCode[addr - 0x4280];
+		return _oamCode[addr - 0x4200];
 	}
 
 	if(addr >= 0x6000) {
@@ -670,7 +680,7 @@ void Rainbow::WriteRegister(uint16_t addr, uint8_t value)
 			_windowControl.AttrExtMode = value & 0x02;
 			_windowControl.FpgaRamSrc = (value & 0x0C) >> 2;
 			_windowControl.FillMode = value & 0x20;
-			_windowControl.Source = (value & 0xC0) >> 6; //todo this is writeable/readable but ignored?
+			_windowControl.Source = 0b10; // (value & 0xC0) >> 6; //todo this is writeable/readable but ignored?
 			break;
 
 		case 0x4150: _slIrqScanline = value; break;
@@ -728,8 +738,30 @@ void Rainbow::WriteRegister(uint16_t addr, uint8_t value)
 			_wifiIrqEnabled = value & 0x02;
 			break;
 
-		case 0x4191: _dataReceived = false; break;
-		case 0x4192: _dataSent = false; break;
+		case 0x4191:
+		{
+			if(_espEnabled) EspClearMessageReceived();
+			else MessageManager::Log("[Rainbow] warning: $4190.0 is not set.");
+			break;
+			//  _dataReceived = false; break;
+		}
+		case 0x4192:
+		{
+			if(_espEnabled) {
+				_dataSent = false;
+				uint8_t message_length = _mapperRam[0x1800 + (_sendSrcAddr << 8)];
+				if(message_length == 0) break;
+				_esp->rx(message_length);
+				for(uint8_t i = 0; i < message_length; i++) {
+					_esp->rx(_mapperRam[0x1800 + (_sendSrcAddr << 8) + 1 + i]);
+				}
+				_dataSent = true;
+			}
+			//else FCEU_printf("RAINBOW warning: $4190.0 is not set\n");
+			else MessageManager::Log("[Rainbow] warning: $4190.0 is not set.");
+			break;
+			// _dataSent = false; break;
+		}
 		case 0x4193: _recvDstAddr = value & 0x07; break;
 		case 0x4194: _sendSrcAddr = value & 0x07; break;
 
@@ -1109,4 +1141,30 @@ void Rainbow::Serialize(Serializer& s)
 	SV(_audio);
 
 	SerializeRomDiff(s, _orgPrgRom, &_orgChrRom);
+}
+
+void Rainbow::EspCheckNewMessage()
+{
+	// get new message if needed
+	if(_espEnabled && _esp->getDataReadyIO() && _dataReceived == false) {
+		uint8_t message_length = _esp->tx();
+		_mapperRam[0x1800 + (_recvDstAddr << 8)] = message_length;
+		// _fpgaRam[0x1800 + (_recvDstAddr << 8)] = message_length;
+		for(uint8_t i = 0; i < message_length; i++) {
+			_mapperRam[0x1800 + (_recvDstAddr << 8) + 1 + i] = _esp->tx();
+			// _fpgaRam[0x1800 + (_recvDstAddr << 8) + 1 + i] = _esp->tx();
+		}
+		_dataReceived = true;
+	}
+}
+
+bool Rainbow::EspMessageReceived()
+{
+	EspCheckNewMessage();
+	return _dataReceived;
+}
+
+void Rainbow::EspClearMessageReceived()
+{
+	_dataReceived = false;
 }

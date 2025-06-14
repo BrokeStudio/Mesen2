@@ -2,6 +2,7 @@
 #include "pch.h"
 #include "NES/BaseMapper.h"
 #include "NES/Debugger/IExtModeMapperDebug.h"
+#include "NES/Mappers/Homebrew/RainbowESP.h"
 
 class RainbowAudio;
 class FlashS29;
@@ -109,13 +110,15 @@ private:
 
 	uint8_t _oamExtUpdatePage = 0;
 	uint8_t _oamSlowUpdatePage = 0;
-	uint8_t _oamCode[0x506] = {};
+	// uint8_t _oamCode[0x506] = {};
+	uint8_t _oamCode[0x600] = {};
 	bool _oamCodeLocked = false;
 
+	BrokeStudioFirmware* _esp = NULL;
 	bool _espEnabled = false;
 	bool _wifiIrqEnabled = false;
 	bool _wifiIrqPending = false;
-	bool _dataSent = false;
+	bool _dataSent = true;
 	bool _dataReceived = false;
 	bool _dataReady = false;
 	uint8_t _sendSrcAddr = 0;
@@ -181,4 +184,8 @@ public:
 	ExtModeConfig GetExModeConfig() override;
 
 	void Serialize(Serializer& s) override;
+
+	void EspCheckNewMessage();
+	bool EspMessageReceived();
+	void EspClearMessageReceived();
 };
