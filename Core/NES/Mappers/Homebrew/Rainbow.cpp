@@ -405,11 +405,11 @@ uint8_t Rainbow::MapperReadVram(uint16_t addr, MemoryOperationType memoryOperati
 				return _fillModeTileIndex;
 			}
 		} else {
-			if(ctrl.AttrExtMode) {
+			if(ctrl.FillMode) {
+				return _fillModeAttrIndex * 0x55;
+			} else if(ctrl.AttrExtMode) {
 				uint8_t attr = (_extData & 0xC0) >> 6;
 				return attr * 0x55;
-			} else if(ctrl.FillMode) {
-				return _fillModeAttrIndex * 0x55;
 			}
 		}
 
