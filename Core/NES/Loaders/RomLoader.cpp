@@ -16,7 +16,7 @@
 #include "NES/NesHeader.h"
 #include "NES/GameDatabase.h"
 
-bool RomLoader::LoadFile(VirtualFile &romFile, RomData& romData, bool databaseEnabled)
+bool RomLoader::LoadFile(VirtualFile& romFile, RomData& romData, bool databaseEnabled)
 {
 	if(!romFile.IsValid()) {
 		return false;
@@ -29,9 +29,10 @@ bool RomLoader::LoadFile(VirtualFile &romFile, RomData& romData, bool databaseEn
 	if(fileData.size() < 15) {
 		return false;
 	}
-	
+
 	string filename = romFile.GetFileName();
 	string romName = FolderUtilities::GetFilename(filename, true);
+	string path = romFile.GetFolderPath();
 
 	uint32_t crc = CRC32::GetCRC(fileData.data(), fileData.size());
 	romData.Info.Hash.Crc32 = crc;
@@ -75,6 +76,7 @@ bool RomLoader::LoadFile(VirtualFile &romFile, RomData& romData, bool databaseEn
 
 	romData.Info.RomName = romName;
 	romData.Info.Filename = filename;
+	romData.Info.Path = path;
 
 	if(romData.Info.System == GameSystem::Unknown) {
 		//Use filename to detect PAL/VS system games

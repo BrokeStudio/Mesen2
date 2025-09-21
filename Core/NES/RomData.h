@@ -64,6 +64,7 @@ struct NesRomInfo
 {
 	string RomName;
 	string Filename;
+	string Path;
 	RomFormat Format = {};
 
 	bool IsNes20Header = false;
@@ -74,7 +75,7 @@ struct NesRomInfo
 
 	uint16_t MapperID = 0;
 	uint8_t SubMapperID = 0;
-	
+
 	GameSystem System = GameSystem::Unknown;
 	VsSystemType VsType = VsSystemType::Default;
 	GameInputType InputType = GameInputType::Unspecified;
