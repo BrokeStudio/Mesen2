@@ -124,34 +124,6 @@ uint8_t Rainbow::ReadRam(uint16_t addr)
 	return BaseMapper::ReadRam(addr);
 }
 
-void Rainbow::GenerateOamClear()
-{
-	if(_oamCodeLocked) {
-		return;
-	}
-	_oamCodeLocked = true;
-
-	int i = 6;
-	for(int spr = 0; spr < 64; spr++) {
-		_oamCode[0x80 + i++] = 0xA9; //LDA #spr
-		_oamCode[0x80 + i++] = spr * 4;
-
-		if(spr == 0) {
-			_oamCode[0x80 + i++] = 0xAA; //TAX
-			_oamCode[0x80 + i++] = 0xCA; //DEX
-		}
-
-		_oamCode[0x80 + i++] = 0x8D; //STA $2003
-		_oamCode[0x80 + i++] = 0x03;
-		_oamCode[0x80 + i++] = 0x20;
-
-		_oamCode[0x80 + i++] = 0x8E; //STX $2004
-		_oamCode[0x80 + i++] = 0x04;
-		_oamCode[0x80 + i++] = 0x20;
-	}
-	_oamCode[0x80 + i++] = 0x60; //RTS
-}
-
 void Rainbow::GenerateExtUpdate()
 {
 	if(_oamCodeLocked) {
@@ -604,7 +576,6 @@ uint8_t Rainbow::ReadRegister(uint16_t addr)
 
 		case 0x4280: GenerateOamSlowUpdate(); break;
 		case 0x4282: GenerateExtUpdate(); break;
-		case 0x4286: GenerateOamClear(); break;
 
 		case 0x4190: return (uint8_t)_espEnabled | ((uint8_t)_wifiIrqEnabled << 1);
 		case 0x4191:
@@ -638,7 +609,7 @@ uint8_t Rainbow::ReadRegister(uint16_t addr)
 
 	if(addr >= 0x4280 && addr < 0x4800) {
 		//Built-in OAM functions
-		if(addr >= 0x4286) {
+		if(addr >= 0x4282) {
 			_oamCodeLocked = false;
 		}
 		// return _oamCode[addr - 0x4280];
