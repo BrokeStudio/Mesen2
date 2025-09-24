@@ -77,7 +77,7 @@ void Rainbow::Reset(bool softReset)
 	WriteRegister(0x412D, 0x00);
 	WriteRegister(0x412F, 0x80);
 	WriteRegister(0x4241, 0x07);
-	WriteRegister(0x4242, 0x1B);
+	WriteRegister(0x4242, 0x06);
 	WriteRegister(0x4152, 0x00);
 	WriteRegister(0x4153, 0x87);
 	WriteRegister(0x415A, 0x00);
@@ -135,7 +135,7 @@ void Rainbow::GenerateExtUpdate()
 	int i = 2;
 	for(int spr = 0; spr < 64; spr++) {
 		_oamCode[0x80 + i++] = 0xA9; //LDA #[fpga ram value]
-		_oamCode[0x80 + i++] = _mapperRam[0x1800 + (_oamExtUpdatePage * 0x40) + spr];
+		_oamCode[0x80 + i++] = _mapperRam[0x1800 + (_oamExtUpdatePage * 0x100) + spr * 4];
 
 		_oamCode[0x80 + i++] = 0x8D; //STA $42xx
 		_oamCode[0x80 + i++] = spr;
@@ -749,7 +749,7 @@ void Rainbow::WriteRegister(uint16_t addr, uint8_t value)
 
 		case 0x4240: _spriteExtBank = value & 0x07; break;
 		case 0x4241: _oamSlowUpdatePage = value & 0x07; break;
-		case 0x4242: _oamExtUpdatePage = value & 0x1F; break;
+		case 0x4242: _oamExtUpdatePage = value & 0x07; break;
 	}
 
 	if(addr >= 0x4106 && addr <= 0x4107) {
