@@ -298,6 +298,8 @@ void Rainbow::ProcessCpuClock()
 
 	_jitterCounter++;
 
+	_cpuCycleParity = !_cpuCycleParity;
+
 	_audio->Clock();
 
 	if(_cpuIrqCounter && --_cpuIrqCounter == 0) {
@@ -582,6 +584,8 @@ uint8_t Rainbow::ReadRegister(uint16_t addr)
 				);
 
 		case 0x4154: return _jitterCounter;
+
+		case 0x4157: return _cpuCycleParity ? 0x80 : 0x00;
 
 		case 0x415F:
 		{
@@ -915,6 +919,7 @@ vector<MapperStateEntry> Rainbow::GetMapperStateEntries()
 	entries.push_back(MapperStateEntry("$4151/2", "Enabled", _slIrqEnabled));
 	entries.push_back(MapperStateEntry("$4153", "Cycle Offset", _slIrqOffset, MapperStateValueType::Number8));
 	entries.push_back(MapperStateEntry("$4154", "Jitter Counter", _jitterCounter, MapperStateValueType::Number8));
+	entries.push_back(MapperStateEntry("$4157", "CPU Cycle parity", _cpuCycleParity));
 
 	entries.push_back(MapperStateEntry("", "CPU IRQ"));
 	entries.push_back(MapperStateEntry("$4158/9", "Reload Value", _cpuIrqReloadValue, MapperStateValueType::Number16));
@@ -1107,6 +1112,7 @@ void Rainbow::Serialize(Serializer& s)
 	SV(_inFrame);
 	SV(_inHBlank);
 	SV(_jitterCounter);
+	SV(_cpuCycleParity);
 	SV(_cpuIrqCounter);
 	SV(_cpuIrqReloadValue);
 	SV(_cpuIrqEnabled);
